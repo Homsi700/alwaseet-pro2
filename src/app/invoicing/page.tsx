@@ -1,3 +1,5 @@
+"use client";
+
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -5,8 +7,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PlusCircle, Eye, Edit, Trash2 } from "lucide-react";
+import React, { useState } from 'react';
 
 type InvoiceStatus = "Paid" | "Pending" | "Overdue" | "Draft";
+type InvoiceStatusArabic = "مدفوعة" | "معلقة" | "متأخرة" | "مسودة";
 
 interface Invoice {
   id: string;
@@ -16,16 +20,16 @@ interface Invoice {
   status: InvoiceStatus;
 }
 
-const sampleInvoices: Invoice[] = [
-  { id: "INV001", date: "2024-07-01", customerSupplier: "Tech Solutions Inc.", amount: 1500.00, status: "Paid" },
-  { id: "INV002", date: "2024-07-05", customerSupplier: "Creative Designs LLC", amount: 850.50, status: "Pending" },
-  { id: "INV003", date: "2024-06-15", customerSupplier: "Global Imports Co.", amount: 2200.75, status: "Overdue" },
-  { id: "INV004", date: "2024-07-10", customerSupplier: "Local Services Ltd.", amount: 300.00, status: "Draft" },
-];
+const statusMap: Record<InvoiceStatus, InvoiceStatusArabic> = {
+  Paid: "مدفوعة",
+  Pending: "معلقة",
+  Overdue: "متأخرة",
+  Draft: "مسودة",
+};
 
 const getStatusVariant = (status: InvoiceStatus) => {
   switch (status) {
-    case "Paid": return "default"; // Using primary color for paid
+    case "Paid": return "default";
     case "Pending": return "secondary";
     case "Overdue": return "destructive";
     case "Draft": return "outline";
@@ -36,74 +40,88 @@ const getStatusVariant = (status: InvoiceStatus) => {
 const InvoiceTable = ({ invoices, type }: { invoices: Invoice[]; type: string }) => (
   <Card className="shadow-lg">
     <CardHeader>
-      <CardTitle>{type} Invoices</CardTitle>
+      <CardTitle>فواتير {type}</CardTitle>
     </CardHeader>
     <CardContent>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Invoice #</TableHead>
-            <TableHead>Date</TableHead>
-            <TableHead>Customer/Supplier</TableHead>
-            <TableHead className="text-right">Amount</TableHead>
-            <TableHead className="text-center">Status</TableHead>
-            <TableHead className="text-center">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {invoices.map((invoice) => (
-            <TableRow key={invoice.id}>
-              <TableCell className="font-medium">{invoice.id}</TableCell>
-              <TableCell>{invoice.date}</TableCell>
-              <TableCell>{invoice.customerSupplier}</TableCell>
-              <TableCell className="text-right">${invoice.amount.toFixed(2)}</TableCell>
-              <TableCell className="text-center">
-                <Badge variant={getStatusVariant(invoice.status)}>{invoice.status}</Badge>
-              </TableCell>
-              <TableCell className="text-center space-x-1">
-                <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
-                <Button variant="ghost" size="icon"><Edit className="h-4 w-4" /></Button>
-                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
-              </TableCell>
+      {invoices.length > 0 ? (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>رقم الفاتورة</TableHead>
+              <TableHead>التاريخ</TableHead>
+              <TableHead>العميل/المورد</TableHead>
+              <TableHead className="text-left">المبلغ</TableHead>
+              <TableHead className="text-center">الحالة</TableHead>
+              <TableHead className="text-center">الإجراءات</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {invoices.map((invoice) => (
+              <TableRow key={invoice.id}>
+                <TableCell className="font-medium">{invoice.id}</TableCell>
+                <TableCell>{invoice.date}</TableCell>
+                <TableCell>{invoice.customerSupplier}</TableCell>
+                <TableCell className="text-left">{invoice.amount.toFixed(2)} ر.س</TableCell>
+                <TableCell className="text-center">
+                  <Badge variant={getStatusVariant(invoice.status)}>{statusMap[invoice.status]}</Badge>
+                </TableCell>
+                <TableCell className="text-center space-x-1">
+                  <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon"><Edit className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      ) : (
+        <p className="text-center text-muted-foreground py-4">لا توجد فواتير {type} لعرضها حاليًا.</p>
+      )}
     </CardContent>
   </Card>
 );
 
 export default function InvoicingPage() {
+  const [sampleInvoices, setSampleInvoices] = useState<Invoice[]>([]);
+  // TODO: Fetch invoices from API
+
+  // Filtering logic remains, but will operate on empty or fetched data
+  const salesInvoices = sampleInvoices; // Adjust filter as needed, e.g. by type property
+  const purchaseInvoices = sampleInvoices;
+  const taxInvoices = sampleInvoices;
+  const returnInvoices = sampleInvoices;
+
+
   return (
     <>
       <PageHeader 
-        title="Invoicing Module" 
-        description="Manage all your sales, purchase, tax, and return invoices."
+        title="وحدة الفوترة" 
+        description="إدارة جميع فواتير المبيعات، المشتريات، الضرائب، والمرتجعات."
         actions={
           <Button>
-            <PlusCircle className="mr-2 h-4 w-4" /> Create New Invoice
+            <PlusCircle className="ml-2 h-4 w-4" /> إنشاء فاتورة جديدة
           </Button>
         }
       />
 
-      <Tabs defaultValue="sales">
+      <Tabs defaultValue="sales" dir="rtl">
         <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
-          <TabsTrigger value="sales">Sales</TabsTrigger>
-          <TabsTrigger value="purchase">Purchase</TabsTrigger>
-          <TabsTrigger value="tax">Tax</TabsTrigger>
-          <TabsTrigger value="returns">Returns</TabsTrigger>
+          <TabsTrigger value="sales">المبيعات</TabsTrigger>
+          <TabsTrigger value="purchase">المشتريات</TabsTrigger>
+          <TabsTrigger value="tax">الضرائب</TabsTrigger>
+          <TabsTrigger value="returns">المرتجعات</TabsTrigger>
         </TabsList>
         <TabsContent value="sales">
-          <InvoiceTable invoices={sampleInvoices.filter(inv => inv.amount > 500)} type="Sales" />
+          <InvoiceTable invoices={salesInvoices} type="المبيعات" />
         </TabsContent>
         <TabsContent value="purchase">
-          <InvoiceTable invoices={sampleInvoices.filter(inv => inv.customerSupplier.includes("Import"))} type="Purchase" />
+          <InvoiceTable invoices={purchaseInvoices} type="المشتريات" />
         </TabsContent>
         <TabsContent value="tax">
-           <InvoiceTable invoices={sampleInvoices.filter(inv => inv.status === "Paid")} type="Tax" />
+           <InvoiceTable invoices={taxInvoices} type="الضرائب" />
         </TabsContent>
         <TabsContent value="returns">
-           <InvoiceTable invoices={sampleInvoices.slice(0,1)} type="Return" />
+           <InvoiceTable invoices={returnInvoices} type="المرتجعات" />
         </TabsContent>
       </Tabs>
     </>

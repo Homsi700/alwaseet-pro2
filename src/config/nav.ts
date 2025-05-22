@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, BookOpenText, FileText, Zap, Barcode, Warehouse, Users, Settings } from "lucide-react";
+import { LayoutDashboard, BookOpenText, FileText, Zap, Barcode, Warehouse, Users, Settings, LogIn } from "lucide-react";
 
 export interface NavItem {
   href: string;
@@ -11,51 +11,57 @@ export interface NavItem {
 export const navItems: NavItem[] = [
   {
     href: "/",
-    label: "Dashboard",
+    label: "لوحة التحكم",
     icon: LayoutDashboard,
-    group: "Overview",
+    group: "نظرة عامة",
   },
   {
     href: "/accounting",
-    label: "Accounting",
+    label: "المحاسبة",
     icon: BookOpenText,
-    group: "Financials",
+    group: "المالية",
   },
   {
     href: "/invoicing",
-    label: "Invoicing",
+    label: "الفوترة",
     icon: FileText,
-    group: "Financials",
+    group: "المالية",
   },
   {
     href: "/fast-invoice",
-    label: "Fast Invoice",
+    label: "فاتورة سريعة",
     icon: Zap,
-    group: "Operations",
+    group: "العمليات",
   },
   {
     href: "/barcode-support",
-    label: "Barcode Support",
+    label: "دعم الباركود",
     icon: Barcode,
-    group: "Operations",
+    group: "العمليات",
   },
   {
     href: "/inventory",
-    label: "Inventory",
+    label: "المخزون",
     icon: Warehouse,
-    group: "Operations",
+    group: "العمليات",
   },
   {
     href: "/contacts",
-    label: "Contacts",
+    label: "جهات الاتصال",
     icon: Users,
-    group: "Management",
+    group: "الإدارة",
   },
+  // {
+  //   href: "/login",
+  //   label: "تسجيل الدخول",
+  //   icon: LogIn,
+  //   group: "النظام",
+  // }
   // Example of a settings link, can be removed or adapted
   // {
   //   href: "/settings",
-  //   label: "Settings",
+  //   label: "الإعدادات",
   //   icon: Settings,
-  //   group: "System",
+  //   group: "النظام",
   // }
 ];

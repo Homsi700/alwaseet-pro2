@@ -8,54 +8,55 @@ body {
 
 @layer base {
   :root {
-    --background: 220 17% 95%; /* Light gray #f0f2f5 */
-    --foreground: 220 13% 20%; /* Dark gray for text */
+    --background: 319 100% 9%; /* Dark Aubergine (#2C001E) */
+    --foreground: 0 0% 97%; /* Light Grey (#F7F7F7) */
 
-    --card: 0 0% 100%; /* White */
-    --card-foreground: 220 13% 20%;
+    --card: 319 27% 19%; /* Lighter Dark Aubergine (#3D2234) */
+    --card-foreground: 0 0% 97%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 13% 20%;
+    --popover: 319 27% 15%; /* Slightly darker than card */
+    --popover-foreground: 0 0% 97%;
 
-    --primary: 207 100% 73%; /* Sky blue #74b9ff */
-    --primary-foreground: 207 100% 15%; /* Dark blue for text on primary */
+    --primary: 16 82% 52%; /* Ubuntu Orange (#E95420) */
+    --primary-foreground: 0 0% 100%; /* White for contrast */
 
-    --secondary: 220 15% 90%; /* Slightly darker gray */
-    --secondary-foreground: 220 13% 20%;
+    --secondary: 317 39% 26%; /* Ubuntu Purple (#5E2750) */
+    --secondary-foreground: 0 0% 97%;
 
-    --muted: 220 15% 90%;
-    --muted-foreground: 220 10% 45%; /* Lighter gray for muted text */
+    --muted: 319 100% 12%; /* Slightly lighter than background */
+    --muted-foreground: 34 7% 60%; /* Warm Grey for muted text */
 
-    --accent: 243 98% 80%; /* Soft purple #a29bfe */
-    --accent-foreground: 243 98% 15%; /* Dark purple for text on accent */
+    --accent: 300 60% 60%; /* Lighter, vibrant purple for accents */
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 70% 50%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 220 10% 85%;
-    --input: 220 10% 85%;
-    --ring: 207 100% 73%; /* Primary color for rings */
+    --border: 319 27% 25%; /* Slightly lighter than card for borders */
+    --input: 319 27% 25%;
+    --ring: 16 82% 52%; /* Ubuntu Orange for rings */
 
-    --chart-1: 207 80% 65%;
-    --chart-2: 243 80% 75%;
-    --chart-3: 173 58% 39%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --chart-1: 16 82% 60%; /* Orange family */
+    --chart-2: 300 60% 65%; /* Purple family */
+    --chart-3: 25 70% 60%; /* Lighter Orange */
+    --chart-4: 317 45% 40%; /* Deeper Purple */
+    --chart-5: 40 80% 55%; /* Yellowish Orange */
     
     --radius: 0.5rem;
 
     /* Sidebar specific colors */
-    --sidebar-background: 210 25% 18%; /* Dark, desaturated blue-gray */
-    --sidebar-foreground: 210 20% 90%; /* Light text for dark sidebar */
-    --sidebar-primary: 207 100% 73%; /* Sky blue for active/hover items */
-    --sidebar-primary-foreground: 207 100% 15%; /* Dark blue text on sky blue */
-    --sidebar-accent: 210 20% 30%; /* Hover color for menu items */
-    --sidebar-accent-foreground: 210 20% 95%; /* Text on hover */
-    --sidebar-border: 210 20% 25%;
-    --sidebar-ring: 207 100% 73%; /* Primary color for rings */
+    --sidebar-background: 319 100% 7%; /* Even darker aubergine (#210017) */
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 16 82% 52%; /* Ubuntu Orange */
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 319 27% 15%; /* Hover color */
+    --sidebar-accent-foreground: 0 0% 97%;
+    --sidebar-border: 319 100% 5%;
+    --sidebar-ring: 16 82% 52%;
   }
 
   .dark {
+    /* Keeping dark theme distinct for now, or could mirror :root if only one theme is desired */
     --background: 220 13% 10%; 
     --foreground: 220 10% 85%;
 
@@ -65,40 +66,40 @@ body {
     --popover: 220 13% 12%;
     --popover-foreground: 220 10% 85%;
 
-    --primary: 207 100% 73%;
-    --primary-foreground: 207 100% 15%;
+    --primary: 16 82% 52%; /* Ubuntu Orange for dark theme too */
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 10% 20%;
-    --secondary-foreground: 220 10% 85%;
+    --secondary: 317 39% 30%; /* Slightly lighter purple for dark theme */
+    --secondary-foreground: 0 0% 97%;
 
     --muted: 220 10% 20%;
     --muted-foreground: 220 10% 55%;
 
-    --accent: 243 98% 80%;
-    --accent-foreground: 243 98% 15%;
+    --accent: 300 60% 65%; /* Lighter purple accent for dark theme */
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 70% 50%;
     --destructive-foreground: 0 0% 98%;
 
     --border: 220 10% 25%;
     --input: 220 10% 25%;
-    --ring: 207 100% 73%;
+    --ring: 16 82% 52%;
     
-    --chart-1: 207 80% 65%;
-    --chart-2: 243 80% 75%;
-    --chart-3: 173 58% 39%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --chart-1: 16 82% 60%;
+    --chart-2: 300 60% 65%;
+    --chart-3: 25 70% 60%;
+    --chart-4: 317 45% 40%;
+    --chart-5: 40 80% 55%;
 
     /* Dark Sidebar specific colors */
-    --sidebar-background: 220 13% 8%; 
-    --sidebar-foreground: 220 10% 80%; 
-    --sidebar-primary: 207 100% 73%; 
-    --sidebar-primary-foreground: 207 100% 15%; 
-    --sidebar-accent: 220 10% 15%; 
-    --sidebar-accent-foreground: 220 10% 90%; 
-    --sidebar-border: 220 10% 12%;
-    --sidebar-ring: 207 100% 73%;
+    --sidebar-background: 319 100% 6%; /* Even darker for dark theme sidebar */
+    --sidebar-foreground: 0 0% 85%; 
+    --sidebar-primary: 16 82% 52%; 
+    --sidebar-primary-foreground: 0 0% 100%; 
+    --sidebar-accent: 319 27% 12%; 
+    --sidebar-accent-foreground: 0 0% 95%; 
+    --sidebar-border: 319 100% 4%;
+    --sidebar-ring: 16 82% 52%;
   }
 }
 

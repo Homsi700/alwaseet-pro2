@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Briefcase, ChevronDown, ChevronUp } from "lucide-react";
+import { Briefcase, ChevronDown, ChevronUp, LogOut, User, Settings, CreditCard } from "lucide-react"; // Added icons
 import {
   SidebarProvider,
   Sidebar,
@@ -46,7 +46,7 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
 
   const groupedItems = navItems.reduce((acc, item) => {
-    const groupName = item.group || "General";
+    const groupName = item.group || "عام"; // Default group name in Arabic
     if (!acc[groupName]) {
       acc[groupName] = [];
     }
@@ -61,7 +61,7 @@ export function AppShell({ children }: AppShellProps) {
           <Link href="/" className="flex items-center gap-2">
             <Briefcase className="h-8 w-8 text-primary" />
             <h1 className="text-xl font-semibold text-sidebar-foreground group-data-[collapsible=icon]:hidden">
-              Al Waseet Pro
+              الوسيط برو
             </h1>
           </Link>
         </SidebarHeader>
@@ -79,7 +79,7 @@ export function AppShell({ children }: AppShellProps) {
                         <SidebarMenuButton
                           asChild
                           isActive={pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href))}
-                          tooltip={{ children: item.label, side: "right", className: "bg-primary text-primary-foreground" }}
+                          tooltip={{ children: item.label, side: "left", className: "bg-primary text-primary-foreground" }}
                         >
                           <Link href={item.href}>
                             <item.icon />
@@ -99,21 +99,33 @@ export function AppShell({ children }: AppShellProps) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="w-full justify-start items-center gap-2 p-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-auto">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src="https://placehold.co/100x100.png" alt="User Avatar" data-ai-hint="user avatar" />
-                  <AvatarFallback>AW</AvatarFallback>
+                  {/* Removed placeholder AvatarImage, relying on Fallback */}
+                  <AvatarFallback>م ض</AvatarFallback> {/* Example: Admin User initials in Arabic */}
                 </Avatar>
-                <span className="text-sidebar-foreground group-data-[collapsible=icon]:hidden">Admin User</span>
-                <ChevronDown className="ml-auto h-4 w-4 text-sidebar-foreground group-data-[collapsible=icon]:hidden" />
+                <span className="text-sidebar-foreground group-data-[collapsible=icon]:hidden">المستخدم المسؤول</span>
+                <ChevronDown className="mr-auto h-4 w-4 text-sidebar-foreground group-data-[collapsible=icon]:hidden" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="start" className="w-56">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+            <DropdownMenuContent side="top" align="start" className="w-56" dir="rtl">
+              <DropdownMenuLabel>حسابي</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Profile</DropdownMenuItem>
-              <DropdownMenuItem>Billing</DropdownMenuItem>
-              <DropdownMenuItem>Settings</DropdownMenuItem>
+              <DropdownMenuItem>
+                <User className="ml-2 h-4 w-4" />
+                <span>الملف الشخصي</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <CreditCard className="ml-2 h-4 w-4" />
+                <span>الفواتير</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Settings className="ml-2 h-4 w-4" />
+                <span>الإعدادات</span>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Log out</DropdownMenuItem>
+              <DropdownMenuItem>
+                <LogOut className="ml-2 h-4 w-4" />
+                <span>تسجيل الخروج</span>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </SidebarFooter>
