@@ -6,32 +6,33 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Barcode, Search, Package, DollarSign, Info, QrCode as QrCodeIcon } from "lucide-react"; // Changed QrCodeScan to QrCodeIcon
+import { Barcode, Search, Package, DollarSign, Info, QrCode as QrCodeIcon } from "lucide-react";
 import Image from "next/image";
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { getInventoryItemByBarcode, InventoryItem } from "@/lib/services/inventory"; // Assuming type is exported
 
-interface ScannedItem {
-  id: string;
-  name: string;
-  price: string;
-  description: string;
-  stock: string;
-  category: string;
-  imageUrl?: string;
-}
+// ScannedItem can be simplified to InventoryItem if fields match
+// interface ScannedItem {
+//   id: string; // barcode
+//   name: string;
+//   price: string; // should be number
+//   description: string;
+//   stock: string; // should be number or status
+//   category: string;
+//   imageUrl?: string;
+// }
 
 export default function BarcodeSupportPage() {
-  const [scannedItem, setScannedItem] = useState<ScannedItem | null>(null);
+  const [scannedItem, setScannedItem] = useState<InventoryItem | null>(null);
   const [barcodeInput, setBarcodeInput] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const { toast } = useToast();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null); // null: not yet determined, true: granted, false: denied/error
 
   useEffect(() => {
-    // getCameraPermission is now called by startCameraScan
     return () => {
       if (videoRef.current && videoRef.current.srcObject) {
         const stream = videoRef.current.srcObject as MediaStream;
@@ -41,18 +42,15 @@ export default function BarcodeSupportPage() {
   }, []);
 
 
-  const handleFetchDetails = () => {
+  const handleFetchDetails = useCallback(async () => {
     if (!barcodeInput.trim()) {
       toast({ title: "الرجاء إدخال باركود", description: "حقل الباركود لا يمكن أن يكون فارغًا.", variant: "destructive" });
       setScannedItem(null);
       return;
     }
     setIsLoading(true);
-    // Simulate API call - In a real app, this would fetch from a backend
-    setTimeout(() => {
-      // const item = mockItemDatabase.find(i => i.id === barcodeInput.trim()); // mockItemDatabase is removed
-      // For now, we simulate not finding any item as there's no database
-      const item = null;
+    try {
+      const item = await getInventoryItemByBarcode(barcodeInput.trim());
       if (item) {
         setScannedItem(item);
         toast({ title: "تم العثور على المنتج", description: `عرض تفاصيل المنتج: ${item.name}` });
@@ -60,25 +58,28 @@ export default function BarcodeSupportPage() {
         setScannedItem(null);
         toast({ title: "لم يتم العثور على المنتج", description: "الباركود المدخل غير مسجل في النظام.", variant: "destructive" });
       }
+    } catch (error) {
+      setScannedItem(null);
+      toast({ title: "خطأ في البحث", description: "حدث خطأ أثناء البحث عن المنتج.", variant: "destructive" });
+      console.error("Error fetching item by barcode:", error);
+    } finally {
       setIsLoading(false);
-    }, 1000);
-  };
+    }
+  }, [barcodeInput, toast]);
 
   const startCameraScan = async () => {
-    if (hasCameraPermission === false) { // Already tried and failed
+    if (hasCameraPermission === false) {
        toast({ variant: 'destructive', title: 'الكاميرا غير متاحة', description: 'لا يمكن بدء المسح. يرجى التأكد من صلاحيات الكاميرا أو أنها غير مستخدمة من قبل تطبيق آخر.'});
        return;
     }
 
-    // If camera is already active, don't re-request unless necessary
     if (videoRef.current && videoRef.current.srcObject && videoRef.current.readyState >= videoRef.current.HAVE_CURRENT_DATA) {
         toast({ title: "الكاميرا نشطة بالفعل", description: "يمكنك توجيهها نحو الباركود للمسح."});
-        videoRef.current.play().catch(e => console.error("Error playing video: ", e)); // Ensure it's playing
-        // TODO: Integrate actual barcode scanning library here
+        videoRef.current.play().catch(e => console.error("Error playing video: ", e));
+        // TODO: Integrate actual barcode scanning library here that calls setBarcodeInput(detectedBarcode) and then handleFetchDetails()
         return;
     }
-
-    // Request camera permission if not yet determined or not active
+    
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         setHasCameraPermission(false);
         toast({ variant: 'destructive', title: 'ميزة الكاميرا غير مدعومة', description: 'متصفحك لا يدعم الوصول إلى الكاميرا.' });
@@ -90,21 +91,27 @@ export default function BarcodeSupportPage() {
         setHasCameraPermission(true);
         if (videoRef.current) {
             videoRef.current.srcObject = stream;
-            videoRef.current.play().catch(e => console.error("Error playing video: ", e));
-             // TODO: Integrate actual barcode scanning library here
-             // For now, we'll simulate a scan after a few seconds that will likely not find an item
-            setTimeout(() => {
-                if (videoRef.current && videoRef.current.srcObject) {
-                    setBarcodeInput("000000000000"); // Simulate scanning a non-existent item
-                    handleFetchDetails();
-                    toast({ title: "تم المسح (محاكاة)", description: "تمت محاكاة مسح باركود. ابحث عن المنتج يدويًا إذا لم يظهر."});
-                }
-            }, 3000);
+            await videoRef.current.play();
+             toast({ title: "الكاميرا جاهزة للمسح", description: "وجه الكاميرا نحو الباركود."});
+             // TODO: Integrate barcode scanning library. For now, simulate a scan:
+            // setTimeout(() => {
+            //     if (videoRef.current && videoRef.current.srcObject) {
+            //         setBarcodeInput("1234567890123"); // Example barcode from mock data
+            //         handleFetchDetails();
+            //         toast({ title: "تم المسح (محاكاة)", description: "تمت محاكاة مسح باركود."});
+            //     }
+            // }, 3000);
         }
     } catch (error) {
         console.error('Error starting camera:', error);
         setHasCameraPermission(false);
-        toast({ variant: 'destructive', title: 'خطأ في تشغيل الكاميرا', description: 'لم نتمكن من تشغيل الكاميرا. يرجى التحقق من الصلاحيات والمحاولة مرة أخرى.'});
+        let description = 'لم نتمكن من تشغيل الكاميرا. يرجى التحقق من الصلاحيات والمحاولة مرة أخرى.';
+        if (error instanceof DOMException && error.name === "NotAllowedError") {
+            description = "تم رفض إذن الوصول إلى الكاميرا. يرجى تمكين الكاميرا في إعدادات المتصفح.";
+        } else if (error instanceof DOMException && error.name === "NotFoundError") {
+            description = "لم يتم العثور على كاميرا. يرجى التأكد من توصيل كاميرا وعملها بشكل صحيح.";
+        }
+        toast({ variant: 'destructive', title: 'خطأ في تشغيل الكاميرا', description});
     }
   };
 
@@ -151,7 +158,7 @@ export default function BarcodeSupportPage() {
                         <p>انقر على زر الكاميرا لبدء المسح</p>
                     </div>
                  )}
-                 {hasCameraPermission === false && ( // Show this persistent message if permission was denied
+                 {hasCameraPermission === false && ( 
                     <Alert variant="destructive" className="mt-2">
                       <AlertTitle>الكاميرا غير متاحة أو غير مسموح بها</AlertTitle>
                       <AlertDescription>
@@ -190,10 +197,10 @@ export default function BarcodeSupportPage() {
           <CardContent>
             {scannedItem ? (
               <div className="space-y-4">
-                {scannedItem.imageUrl && (
+                {scannedItem.images && scannedItem.images[0] && (
                   <div className="w-full h-60 relative rounded-lg overflow-hidden shadow-md mb-4 bg-muted">
                     <Image
-                      src={scannedItem.imageUrl}
+                      src={scannedItem.images[0]}
                       alt={scannedItem.name}
                       layout="fill"
                       objectFit="cover"
@@ -203,14 +210,14 @@ export default function BarcodeSupportPage() {
                 )}
                 <h3 className="text-2xl font-semibold text-foreground">{scannedItem.name}</h3>
                 <p className="text-3xl font-bold text-primary flex items-center">
-                  <DollarSign className="ml-2 h-7 w-7" /> {scannedItem.price} ر.س
+                  <DollarSign className="ml-2 h-7 w-7" /> {scannedItem.sellingPrice.toFixed(2)} ر.س
                 </p>
 
                 <div className="space-y-3 text-base">
                     <div className="flex items-center">
                         <Info className="ml-2 h-5 w-5 text-muted-foreground" />
                         <span className="font-medium text-muted-foreground">الوصف:</span>
-                        <span className="mr-2 text-foreground">{scannedItem.description}</span>
+                        <span className="mr-2 text-foreground">{scannedItem.notes || "لا يوجد وصف"}</span>
                     </div>
                     <div className="flex items-center">
                         <Package className="ml-2 h-5 w-5 text-muted-foreground" />
@@ -220,8 +227,8 @@ export default function BarcodeSupportPage() {
                     <div className="flex items-center">
                         <Package className="ml-2 h-5 w-5 text-muted-foreground" />
                          <span className="font-medium text-muted-foreground">التوفر:</span>
-                        <span className={`mr-2 font-semibold ${scannedItem.stock.includes("متوفر") ? "text-green-600" : "text-red-600"}`}>
-                          {scannedItem.stock}
+                        <span className={`mr-2 font-semibold ${scannedItem.quantity > 0 ? "text-green-600" : "text-red-600"}`}>
+                          {scannedItem.quantity > 0 ? `متوفر (${scannedItem.quantity} ${scannedItem.unitOfMeasure})` : "نفذ المخزون"}
                         </span>
                     </div>
                 </div>
@@ -245,5 +252,3 @@ export default function BarcodeSupportPage() {
     </>
   );
 }
-
-    
