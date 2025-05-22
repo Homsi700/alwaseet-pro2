@@ -7,83 +7,29 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, Eye, Edit, Trash2, Search, Filter, FileText, ShoppingBag, RotateCcw, FileSignature, Printer, Save } from "lucide-react";
-import React, { useState, useEffect, useCallback } from 'react';
+import { PlusCircle, Eye, Edit, Trash2, Search, Filter, FileText, ShoppingBag, RotateCcw, FileSignature, Printer, Save, ScanLine } from "lucide-react";
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getInvoices as getInvoicesService, createInvoice, updateInvoice, deleteInvoice as deleteInvoiceService } from "@/lib/services/invoicing";
-import { getContacts, Contact } from "@/lib/services/contacts"; // Assuming Contact type is exported
-import { getInventoryItems, InventoryItem } from "@/lib/services/inventory"; // Assuming InventoryItem type is exported
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { getInvoices as getInvoicesService, createInvoice as createInvoiceService, updateInvoice as updateInvoiceService, deleteInvoice as deleteInvoiceService, Invoice, InvoiceItem as InvoiceLineItem, InvoiceStatus, InvoiceType } from "@/lib/services/invoicing";
+import { getContacts, Contact } from "@/lib/services/contacts";
+import { getInventoryItems, InventoryItem, getInventoryItemByBarcode } from "@/lib/services/inventory";
 
-
-export type InvoiceType = "Sales" | "Purchase" | "Tax" | "Return";
-export type InvoiceStatus = "Paid" | "Pending" | "Overdue" | "Draft" | "Cancelled" | "PartiallyPaid";
-type InvoiceStatusArabic = "مدفوعة" | "معلقة" | "متأخرة السداد" | "مسودة" | "ملغاة" | "مدفوعة جزئياً";
-
-export interface InvoiceItem {
-    productId: string;
-    productName: string;
-    quantity: number;
-    unitPrice: number;
-    discountRate?: number; 
-    taxRate?: number; 
-    totalPrice: number; 
-}
-
-export interface Invoice {
-  id: string;
-  invoiceNumber: string;
-  date: string;
-  dueDate?: string;
-  customerSupplierName: string; 
-  customerSupplierId: string;
-  amount: number;
-  taxAmount: number;
-  totalAmount: number;
-  status: InvoiceStatus;
-  type: InvoiceType; 
-  paymentMethod?: string; 
-  notes?: string; 
-  salesperson?: string; 
-  isEInvoice?: boolean; 
-  eInvoiceStatus?: string; 
-  items: InvoiceItem[];
-}
-
-const invoiceItemSchema = z.object({
-  productId: z.string().min(1, "المنتج مطلوب"),
-  productName: z.string(), // Will be auto-filled
-  quantity: z.coerce.number().min(1, "الكمية يجب أن تكون 1 على الأقل"),
-  unitPrice: z.coerce.number().min(0, "سعر الوحدة لا يمكن أن يكون سالبًا"),
-  discountRate: z.coerce.number().min(0).max(1).optional(),
-  taxRate: z.coerce.number().min(0).max(1).default(0.15), // Default VAT 15%
-});
-
-const invoiceFormSchema = z.object({
-  type: z.enum(["Sales", "Purchase", "Tax", "Return"], { required_error: "نوع الفاتورة مطلوب" }),
-  customerSupplierId: z.string().min(1, "العميل/المورد مطلوب"),
-  date: z.string().min(1, "تاريخ الفاتورة مطلوب").refine(val => !isNaN(Date.parse(val.split('/').reverse().join('-'))), {message: "تاريخ الفاتورة غير صالح (مثال: 31/12/2025)"}),
-  dueDate: z.string().optional().refine(val => !val || !isNaN(Date.parse(val.split('/').reverse().join('-'))), {message: "تاريخ الاستحقاق غير صالح"}),
-  paymentMethod: z.string().optional(),
-  salesperson: z.string().optional(),
-  notes: z.string().optional(),
-  isEInvoice: z.boolean().default(false),
-  items: z.array(invoiceItemSchema).min(1, "يجب إضافة بند واحد على الأقل للفاتورة"),
-});
-
-type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
-
-
-const statusMap: Record<InvoiceStatus, InvoiceStatusArabic> = {
+// Mappings for display
+const statusMap: Record<InvoiceStatus, string> = {
   Paid: "مدفوعة", Pending: "معلقة", Overdue: "متأخرة السداد", Draft: "مسودة", Cancelled: "ملغاة", PartiallyPaid: "مدفوعة جزئياً",
 };
-
+const typeMap: Record<InvoiceType, string> = {
+  Sales: "مبيعات", Purchase: "مشتريات", Tax: "ضريبية", Return: "مرتجع",
+};
 const getStatusVariant = (status: InvoiceStatus): "default" | "secondary" | "destructive" | "outline" => {
   switch (status) {
     case "Paid": return "default"; case "Pending": return "secondary"; case "Overdue": return "destructive"; 
@@ -92,6 +38,7 @@ const getStatusVariant = (status: InvoiceStatus): "default" | "secondary" | "des
   }
 };
 const getStatusColorClass = (status: InvoiceStatus): string => {
+  // Using Tailwind classes directly for badges, can be customized further
   switch (status) {
     case "Paid": return "bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700";
     case "Pending": return "bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-700";
@@ -101,48 +48,94 @@ const getStatusColorClass = (status: InvoiceStatus): string => {
     case "PartiallyPaid": return "bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700";
     default: return "bg-gray-100 text-gray-700 border-gray-300 dark:bg-gray-700/30 dark:text-gray-300 dark:border-gray-600";
   }
-}
+};
+
+// Zod Schemas
+const invoiceItemSchema = z.object({
+  productId: z.string().min(1, "المنتج مطلوب"),
+  productName: z.string(), // Auto-filled
+  quantity: z.coerce.number().min(0.01, "الكمية يجب أن تكون أكبر من صفر"),
+  unitPrice: z.coerce.number().min(0, "سعر الوحدة لا يمكن أن يكون سالبًا"),
+  discountRate: z.coerce.number().min(0).max(1).optional().default(0),
+  taxRate: z.coerce.number().min(0).max(1).default(0.15), // Default VAT 15%
+  // totalPrice will be calculated
+});
+type InvoiceItemFormData = z.infer<typeof invoiceItemSchema>;
+
+const invoiceFormSchema = z.object({
+  type: z.enum(["Sales", "Purchase", "Tax", "Return"], { required_error: "نوع الفاتورة مطلوب" }),
+  customerSupplierId: z.string().min(1, "العميل/المورد مطلوب"),
+  date: z.string().min(1, "تاريخ الفاتورة مطلوب").refine(val => !isNaN(Date.parse(val.split('/').reverse().join('-'))), {message: "تاريخ الفاتورة غير صالح (مثال: 31/12/2025)"}),
+  dueDate: z.string().optional().refine(val => !val || !isNaN(Date.parse(val.split('/').reverse().join('-'))), {message: "تاريخ الاستحقاق غير صالح"}),
+  paymentMethod: z.string().optional(),
+  salesperson: z.string().optional(),
+  notes: z.string().optional(),
+  isEInvoice: z.boolean().default(true), // Default to true as per previous setup
+  status: z.enum(["Paid", "Pending", "Overdue", "Draft", "Cancelled", "PartiallyPaid"]).default("Draft"),
+  items: z.array(invoiceItemSchema).min(1, "يجب إضافة بند واحد على الأقل للفاتورة"),
+});
+type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
+
 
 interface InvoiceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   invoice?: Invoice | null;
-  onSave: () => void;
+  onSave: () => void; // Callback to refresh data
   contacts: Contact[];
   products: InventoryItem[];
 }
 
 function InvoiceDialog({ open, onOpenChange, invoice, onSave, contacts, products }: InvoiceDialogProps) {
   const { toast } = useToast();
+  const itemBarcodeRefs = useRef<(HTMLInputElement | null)[]>([]);
+  
   const form = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceFormSchema),
-    defaultValues: {
-      type: "Sales", customerSupplierId: "", date: new Date().toLocaleDateString('fr-CA').split('-').reverse().join('/'), // DD/MM/YYYY
-      items: [{ productId: "", productName: "", quantity: 1, unitPrice: 0, taxRate: 0.15 }],
-      isEInvoice: true,
-    },
+    defaultValues: invoice 
+      ? {
+          ...invoice,
+          items: invoice.items.map(item => ({
+            productId: item.productId,
+            productName: item.productName,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            discountRate: item.discountRate || 0,
+            taxRate: item.taxRate || 0.15,
+          }))
+        }
+      : {
+          type: "Sales",
+          date: new Date().toLocaleDateString('fr-CA').split('-').reverse().join('/'), // DD/MM/YYYY
+          items: [{ productId: "", productName: "", quantity: 1, unitPrice: 0, taxRate: 0.15, discountRate: 0 }],
+          isEInvoice: true,
+          status: "Draft",
+        },
   });
-  const { fields, append, remove } = useFieldArray({ control: form.control, name: "items" });
+  const { fields, append, remove, update } = useFieldArray({ control: form.control, name: "items" });
 
   useEffect(() => {
-    if (invoice) {
-      form.reset({
-        type: invoice.type,
-        customerSupplierId: invoice.customerSupplierId,
-        date: invoice.date,
-        dueDate: invoice.dueDate || "",
-        paymentMethod: invoice.paymentMethod || "",
-        salesperson: invoice.salesperson || "",
-        notes: invoice.notes || "",
-        isEInvoice: invoice.isEInvoice || false,
-        items: invoice.items.map(item => ({ ...item, discountRate: item.discountRate || 0, taxRate: item.taxRate || 0.15 })),
-      });
-    } else {
-       form.reset({
-        type: "Sales", customerSupplierId: "", date: new Date().toLocaleDateString('fr-CA').split('-').reverse().join('/'),
-        items: [{ productId: "", productName: "", quantity: 1, unitPrice: 0, taxRate: 0.15 }],
-        isEInvoice: true, 
-      });
+    if (open) { // Reset form when dialog opens or invoice prop changes
+      if (invoice) {
+        form.reset({
+          ...invoice,
+          customerSupplierId: invoice.customerSupplierId || "",
+          items: invoice.items.map(item => ({
+            productId: item.productId,
+            productName: item.productName,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            discountRate: item.discountRate || 0,
+            taxRate: item.taxRate || 0.15,
+          }))
+        });
+      } else {
+         form.reset({
+          type: "Sales", customerSupplierId: "", date: new Date().toLocaleDateString('fr-CA').split('-').reverse().join('/'),
+          items: [{ productId: "", productName: "", quantity: 1, unitPrice: 0, taxRate: 0.15, discountRate: 0 }],
+          isEInvoice: true, status: "Draft", paymentMethod: "نقدي",
+        });
+      }
     }
   }, [invoice, form, open]);
 
@@ -153,42 +146,51 @@ function InvoiceDialog({ open, onOpenChange, invoice, onSave, contacts, products
       return;
     }
 
+    // Recalculate totals accurately before saving
+    let calculatedAmount = 0;
+    let calculatedTaxAmount = 0;
     const itemsWithDetails = data.items.map(item => {
       const product = products.find(p => p.id === item.productId);
-      const unitPrice = product ? product.sellingPrice : item.unitPrice; // Use product selling price if available
+      const unitPrice = product ? (data.type === "Purchase" ? product.costPrice : product.sellingPrice) : item.unitPrice;
       const itemSubTotal = item.quantity * unitPrice * (1 - (item.discountRate || 0));
-      const itemTotal = itemSubTotal * (1 + (item.taxRate || 0));
-      return { ...item, productName: product?.name || "منتج غير معروف", unitPrice, totalPrice: itemTotal };
+      const itemTax = itemSubTotal * (item.taxRate || 0);
+      calculatedAmount += itemSubTotal;
+      calculatedTaxAmount += itemTax;
+      return { ...item, productName: product?.name || "منتج غير معروف", unitPrice, totalPrice: itemSubTotal + itemTax };
     });
+    const calculatedTotalAmount = calculatedAmount + calculatedTaxAmount;
     
     const invoicePayload = {
       ...data,
       customerSupplierName: customerSupplier.name,
       items: itemsWithDetails,
-      // Amount, taxAmount, totalAmount will be calculated by the service/backend
+      amount: calculatedAmount,
+      taxAmount: calculatedTaxAmount,
+      totalAmount: calculatedTotalAmount,
     };
 
     try {
-      if (invoice) {
-        await updateInvoice(invoice.id, invoicePayload as Partial<Omit<Invoice, 'id' | 'invoiceNumber' | 'amount' | 'taxAmount' | 'totalAmount'>>);
+      if (invoice && invoice.id) { // Editing existing invoice
+        await updateInvoiceService(invoice.id, invoicePayload as Omit<Invoice, 'id' | 'invoiceNumber'>); // Cast as service expects this shape for update
         toast({ title: "تم التحديث بنجاح", description: "تم تحديث الفاتورة." });
-      } else {
-        // For add, status is usually draft or pending
-        await createInvoice({ ...invoicePayload, status: "Draft" } as Omit<Invoice, 'id' | 'amount' | 'taxAmount' | 'totalAmount'>);
+      } else { // Adding new invoice
+        await createInvoiceService(invoicePayload as Omit<Invoice, 'id' | 'invoiceNumber'>); // Cast as service expects this shape for create
         toast({ title: "تم الإنشاء بنجاح", description: "تم إنشاء الفاتورة." });
       }
-      onSave();
-      onOpenChange(false);
+      onSave(); // Refresh the list
+      onOpenChange(false); // Close dialog
     } catch (error) {
-      toast({ variant: "destructive", title: "حدث خطأ", description: "لم يتم حفظ الفاتورة." });
+      toast({ variant: "destructive", title: "حدث خطأ", description: `لم يتم حفظ الفاتورة. ${error instanceof Error ? error.message : ''}` });
+      console.error("Failed to save invoice:", error);
     }
   };
 
   const calculateItemTotal = (index: number) => {
     const item = form.getValues(`items.${index}`);
-    if (!item) return 0;
+    if (!item || !item.productId) return 0;
     const product = products.find(p => p.id === item.productId);
-    const unitPrice = product ? product.sellingPrice : item.unitPrice;
+    // Use cost price for purchase invoices, selling price otherwise
+    const unitPrice = product ? (form.getValues("type") === "Purchase" ? product.costPrice : product.sellingPrice) : item.unitPrice;
     const subTotal = item.quantity * unitPrice * (1-(item.discountRate || 0));
     return subTotal * (1+(item.taxRate || 0));
   }
@@ -198,11 +200,45 @@ function InvoiceDialog({ open, onOpenChange, invoice, onSave, contacts, products
     return items.reduce((sum, item, index) => sum + calculateItemTotal(index), 0);
   }
 
+  const handleBarcodeScan = async (barcode: string, itemIndex: number) => {
+    if (!barcode.trim()) return;
+    try {
+        const product = await getInventoryItemByBarcode(barcode.trim());
+        if (product) {
+            const price = form.getValues("type") === "Purchase" ? product.costPrice : product.sellingPrice;
+            update(itemIndex, {
+                ...fields[itemIndex], // Keep existing fields like quantity if user set it
+                productId: product.id,
+                productName: product.name,
+                unitPrice: price,
+                // Potentially reset taxRate if it should come from product
+            });
+            toast({title: "تم العثور على المنتج", description: `تم تحديث البند: ${product.name}`});
+            if (itemBarcodeRefs.current[itemIndex]) {
+                 itemBarcodeRefs.current[itemIndex]!.value = ""; // Clear input
+            }
+             // Focus next barcode input or add new item line
+            if (itemIndex === fields.length - 1) { // If it's the last item
+                document.getElementById(`items.${itemIndex}.quantity`)?.focus(); // Focus quantity of current item
+            } else if (itemBarcodeRefs.current[itemIndex+1]){
+                itemBarcodeRefs.current[itemIndex+1]?.focus();
+            }
+
+
+        } else {
+            toast({title: "منتج غير موجود", description: "لم يتم العثور على منتج بهذا الباركود.", variant: "destructive"});
+        }
+    } catch (error) {
+        toast({title: "خطأ", description: "خطأ أثناء البحث بالباركود.", variant: "destructive"});
+    }
+  };
+
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" dir="rtl">
         <DialogHeader>
-          <DialogTitle>{invoice ? "تعديل فاتورة" : "إنشاء فاتورة جديدة"}</DialogTitle>
+          <DialogTitle>{invoice ? `تعديل فاتورة ${invoice.invoiceNumber}` : "إنشاء فاتورة جديدة"}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-2">
@@ -210,96 +246,148 @@ function InvoiceDialog({ open, onOpenChange, invoice, onSave, contacts, products
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                <FormField control={form.control} name="type" render={({ field }) => (
                 <FormItem><FormLabel>نوع الفاتورة</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value} dir="rtl">
+                  <Select onValueChange={field.onChange} value={field.value} dir="rtl">
                     <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                     <SelectContent>
-                      <SelectItem value="Sales">مبيعات</SelectItem><SelectItem value="Purchase">مشتريات</SelectItem>
-                      <SelectItem value="Tax">ضريبية</SelectItem><SelectItem value="Return">مرتجع</SelectItem>
+                      {Object.entries(typeMap).map(([key, value]) => (
+                        <SelectItem key={key} value={key}>{value}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select><FormMessage />
                 </FormItem>
               )}/>
               <FormField control={form.control} name="customerSupplierId" render={({ field }) => (
-                <FormItem><FormLabel>{form.getValues("type") === "Purchase" || form.getValues("type") === "Return" && contacts.find(c=>c.id === field.value)?.type === "Supplier" ? "المورد" : "العميل"}</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value} dir="rtl">
+                <FormItem><FormLabel>{form.getValues("type") === "Purchase" || (form.getValues("type") === "Return" && contacts.find(c=>c.id === field.value)?.type === "Supplier") ? "المورد" : "العميل"}</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value} dir="rtl">
                     <FormControl><SelectTrigger><SelectValue placeholder="اختر..." /></SelectTrigger></FormControl>
                     <SelectContent>
-                      {contacts.filter(c => form.getValues("type") === "Purchase" || form.getValues("type") === "Return" ? c.type === "Supplier" : c.type === "Customer").map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                      {contacts.filter(c => form.getValues("type") === "Purchase" || (form.getValues("type") === "Return" && c.type === "Supplier") ? c.type === "Supplier" : c.type === "Customer").map(c => <SelectItem key={c.id} value={c.id}>{c.name} ({c.phone})</SelectItem>)}
                     </SelectContent>
                   </Select><FormMessage />
                 </FormItem>
               )}/>
               <FormField control={form.control} name="date" render={({ field }) => (
-                <FormItem><FormLabel>تاريخ الفاتورة</FormLabel><FormControl><Input placeholder="DD/MM/YYYY" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>تاريخ الفاتورة</FormLabel><FormControl><Input type="date" {...field} onChange={e => field.onChange(e.target.value ? new Date(e.target.value).toLocaleDateString('fr-CA').split('-').reverse().join('/') : '')} value={field.value ? new Date(field.value.split('/').reverse().join('-')).toISOString().split('T')[0] : ''} /></FormControl><FormMessage /></FormItem>
               )}/>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                <FormField control={form.control} name="dueDate" render={({ field }) => (
-                <FormItem><FormLabel>تاريخ الاستحقاق (اختياري)</FormLabel><FormControl><Input placeholder="DD/MM/YYYY" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>تاريخ الاستحقاق (اختياري)</FormLabel><FormControl><Input type="date" {...field} onChange={e => field.onChange(e.target.value ? new Date(e.target.value).toLocaleDateString('fr-CA').split('-').reverse().join('/') : '')} value={field.value ? new Date(field.value.split('/').reverse().join('-')).toISOString().split('T')[0] : ''} /></FormControl><FormMessage /></FormItem>
               )}/>
-              <FormField control={form.control} name="paymentMethod" render={({ field }) => (
-                <FormItem><FormLabel>طريقة الدفع (اختياري)</FormLabel><FormControl><Input placeholder="نقدي، تحويل..." {...field} /></FormControl><FormMessage /></FormItem>
+               <FormField control={form.control} name="paymentMethod" render={({ field }) => (
+                <FormItem><FormLabel>طريقة الدفع</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || "نقدي"} dir="rtl">
+                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="نقدي">نقدي</SelectItem>
+                      <SelectItem value="شبكة">شبكة (مدى/فيزا)</SelectItem>
+                      <SelectItem value="تحويل بنكي">تحويل بنكي</SelectItem>
+                      <SelectItem value="آجل">آجل</SelectItem>
+                      <SelectItem value="شيك">شيك</SelectItem>
+                    </SelectContent>
+                  </Select><FormMessage />
+                </FormItem>
               )}/>
-              <FormField control={form.control} name="salesperson" render={({ field }) => (
-                <FormItem><FormLabel>مندوب المبيعات (اختياري)</FormLabel><FormControl><Input placeholder="اسم المندوب" {...field} /></FormControl><FormMessage /></FormItem>
+              <FormField control={form.control} name="status" render={({ field }) => (
+                <FormItem><FormLabel>حالة الفاتورة</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value} dir="rtl">
+                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>
+                       {Object.entries(statusMap).map(([key, value]) => (
+                        <SelectItem key={key} value={key}>{value}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select><FormMessage />
+                </FormItem>
               )}/>
             </div>
-             <FormField control={form.control} name="notes" render={({ field }) => (
-                <FormItem><FormLabel>ملاحظات (اختياري)</FormLabel><FormControl><Input placeholder="أي ملاحظات إضافية على الفاتورة" {...field} /></FormControl><FormMessage /></FormItem>
+            <FormField control={form.control} name="notes" render={({ field }) => (
+              <FormItem><FormLabel>ملاحظات (اختياري)</FormLabel><FormControl><Textarea placeholder="أي ملاحظات إضافية على الفاتورة" {...field} /></FormControl><FormMessage /></FormItem>
             )}/>
-             <FormField control={form.control} name="isEInvoice" render={({ field }) => (
-                <FormItem className="flex flex-row items-center space-x-3 space-x-reverse space-y-0 rounded-md border p-3 shadow-sm mt-4">
-                    <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                    <FormLabel className="font-normal mb-0!">فاتورة إلكترونية (حسب متطلبات بلدك)</FormLabel>
-                </FormItem>
-            )}/>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField control={form.control} name="salesperson" render={({ field }) => (
+                    <FormItem><FormLabel>مندوب المبيعات (اختياري)</FormLabel><FormControl><Input placeholder="اسم المندوب" {...field} /></FormControl><FormMessage /></FormItem>
+                )}/>
+                <FormField control={form.control} name="isEInvoice" render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-3 space-x-reverse space-y-0 rounded-md border p-3 shadow-sm mt-4 h-[70px] justify-between">
+                        <FormLabel className="font-normal mb-0!">فاتورة إلكترونية</FormLabel>
+                        <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} dir="ltr" /></FormControl>
+                    </FormItem>
+                )}/>
+            </div>
 
-            {/* Invoice Items */}
             <Card className="mt-4">
               <CardHeader><CardTitle>بنود الفاتورة</CardTitle></CardHeader>
               <CardContent>
+                <div className="hidden md:grid md:grid-cols-[60px_1fr_100px_100px_80px_80px_120px_auto] gap-2 items-end mb-2 font-medium text-sm text-muted-foreground">
+                    <span>باركود</span>
+                    <span>المنتج</span>
+                    <span>الكمية</span>
+                    <span>السعر</span>
+                    <span>خصم</span>
+                    <span>ضريبة</span>
+                    <span>الإجمالي</span>
+                    <span></span>
+                </div>
                 {fields.map((field, index) => (
-                  <div key={field.id} className="grid grid-cols-[1fr_100px_100px_80px_80px_120px_auto] gap-2 items-end mb-3 p-2 border-b">
+                  <div key={field.id} className="grid grid-cols-2 md:grid-cols-[60px_1fr_100px_100px_80px_80px_120px_auto] gap-2 items-start md:items-end mb-3 p-2 border-b">
+                    {/* Barcode input for item */}
+                    <FormItem className="col-span-2 md:col-span-1">
+                      <FormLabel htmlFor={`items.${index}.barcode`} className="text-xs md:hidden">باركود</FormLabel>
+                      <Input
+                        id={`items.${index}.barcode`}
+                        ref={el => itemBarcodeRefs.current[index] = el}
+                        placeholder="امسح"
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                                e.preventDefault();
+                                handleBarcodeScan(e.currentTarget.value, index);
+                            }
+                        }}
+                        className="h-9"
+                      />
+                    </FormItem>
                     <FormField control={form.control} name={`items.${index}.productId`} render={({ field: itemField }) => (
-                      <FormItem><FormLabel className="text-xs">المنتج</FormLabel>
+                      <FormItem className="col-span-2 md:col-span-1"><FormLabel className="text-xs md:hidden">المنتج</FormLabel>
                         <Select onValueChange={(value) => {
                             itemField.onChange(value);
                             const product = products.find(p => p.id === value);
                             form.setValue(`items.${index}.productName`, product?.name || "");
-                            form.setValue(`items.${index}.unitPrice`, product?.sellingPrice || 0);
-                        }} defaultValue={itemField.value} dir="rtl">
-                          <FormControl><SelectTrigger><SelectValue placeholder="اختر منتجًا..." /></SelectTrigger></FormControl>
-                          <SelectContent>{products.map(p => <SelectItem key={p.id} value={p.id}>{p.name} (المتوفر: {p.quantity})</SelectItem>)}</SelectContent>
+                            const price = product ? (form.getValues("type") === "Purchase" ? product.costPrice : product.sellingPrice) : 0;
+                            form.setValue(`items.${index}.unitPrice`, price);
+                        }} value={itemField.value} dir="rtl">
+                          <FormControl><SelectTrigger className="h-9"><SelectValue placeholder="اختر منتجًا..." /></SelectTrigger></FormControl>
+                          <SelectContent>{products.map(p => <SelectItem key={p.id} value={p.id}>{p.name} (م: {p.quantity})</SelectItem>)}</SelectContent>
                         </Select><FormMessage />
                       </FormItem>
                     )}/>
                     <FormField control={form.control} name={`items.${index}.quantity`} render={({ field: itemField }) => (
-                      <FormItem><FormLabel className="text-xs">الكمية</FormLabel><FormControl><Input type="number" {...itemField} /></FormControl><FormMessage /></FormItem>
+                      <FormItem><FormLabel className="text-xs md:hidden">الكمية</FormLabel><FormControl><Input type="number" step="any" {...itemField} className="h-9"/></FormControl><FormMessage /></FormItem>
                     )}/>
                      <FormField control={form.control} name={`items.${index}.unitPrice`} render={({ field: itemField }) => (
-                      <FormItem><FormLabel className="text-xs">سعر الوحدة</FormLabel><FormControl><Input type="number" step="0.01" {...itemField} /></FormControl><FormMessage /></FormItem>
+                      <FormItem><FormLabel className="text-xs md:hidden">سعر الوحدة</FormLabel><FormControl><Input type="number" step="any" {...itemField} className="h-9"/></FormControl><FormMessage /></FormItem>
                     )}/>
                     <FormField control={form.control} name={`items.${index}.discountRate`} render={({ field: itemField }) => (
-                      <FormItem><FormLabel className="text-xs">خصم (%)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...itemField} onChange={e => itemField.onChange(e.target.value ? parseFloat(e.target.value) / 100 : undefined)} value={itemField.value !== undefined ? itemField.value * 100 : ""} /></FormControl><FormMessage /></FormItem>
+                      <FormItem><FormLabel className="text-xs md:hidden">خصم (%)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0" {...itemField} onChange={e => itemField.onChange(e.target.value ? parseFloat(e.target.value) / 100 : 0)} value={itemField.value !== undefined ? (itemField.value * 100).toFixed(2) : ""} className="h-9"/></FormControl><FormMessage /></FormItem>
                     )}/>
                     <FormField control={form.control} name={`items.${index}.taxRate`} render={({ field: itemField }) => (
-                      <FormItem><FormLabel className="text-xs">ضريبة (%)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="15.00" {...itemField} onChange={e => itemField.onChange(e.target.value ? parseFloat(e.target.value) / 100 : 0.15)} value={itemField.value !== undefined ? itemField.value * 100 : "15"} /></FormControl><FormMessage /></FormItem>
+                      <FormItem><FormLabel className="text-xs md:hidden">ضريبة (%)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="15" {...itemField} onChange={e => itemField.onChange(e.target.value ? parseFloat(e.target.value) / 100 : 0.15)} value={itemField.value !== undefined ? (itemField.value * 100).toFixed(2) : "15.00"} className="h-9"/></FormControl><FormMessage /></FormItem>
                     )}/>
-                     <FormItem><FormLabel className="text-xs">الإجمالي</FormLabel><Input value={calculateItemTotal(index).toFixed(2)} readOnly className="bg-muted" /></FormItem>
-                    <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)} className="self-end text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                     <FormItem><FormLabel className="text-xs md:hidden">الإجمالي</FormLabel><Input value={calculateItemTotal(index).toFixed(2)} readOnly className="bg-muted h-9"/></FormItem>
+                    <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)} className="self-center md:self-end text-destructive hover:text-destructive h-9 w-9"><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 ))}
-                <Button type="button" variant="outline" size="sm" onClick={() => append({ productId: "", productName:"", quantity: 1, unitPrice: 0, taxRate: 0.15 })}>
+                <Button type="button" variant="outline" size="sm" onClick={() => append({ productId: "", productName:"", quantity: 1, unitPrice: 0, taxRate: 0.15, discountRate: 0 })}>
                   <PlusCircle className="ml-2 h-4 w-4" /> إضافة بند جديد
                 </Button>
               </CardContent>
             </Card>
-            <div className="text-left font-bold text-lg mt-4">الإجمالي الكلي للفاتورة: {calculateGrandTotal().toFixed(2)} ر.س</div>
+            <div className="text-left font-bold text-xl mt-4">الإجمالي الكلي للفاتورة: {calculateGrandTotal().toFixed(2)} ل.س</div>
 
             <DialogFooter className="pt-6">
               <DialogClose asChild><Button type="button" variant="outline">إلغاء</Button></DialogClose>
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                <Save className="ml-2 h-4 w-4"/> {form.formState.isSubmitting ? "جاري الحفظ..." : "حفظ الفاتورة"}
+                <Save className="ml-2 h-4 w-4"/> {form.formState.isSubmitting ? "جاري الحفظ..." : (invoice ? "حفظ التعديلات" : "إنشاء الفاتورة")}
               </Button>
             </DialogFooter>
           </form>
@@ -342,7 +430,7 @@ const InvoiceTable = ({ invoices, typeLabel, onEdit, onDelete, onView, onPrint, 
               <TableHead>التاريخ</TableHead>
               <TableHead>تاريخ الاستحقاق</TableHead>
               <TableHead>العميل/المورد</TableHead>
-              <TableHead className="text-left">الإجمالي (ر.س)</TableHead>
+              <TableHead className="text-left">الإجمالي (ل.س)</TableHead>
               <TableHead>طريقة الدفع</TableHead>
               <TableHead className="text-center">الحالة</TableHead>
               <TableHead className="text-center">فاتورة إلكترونية</TableHead>
@@ -389,40 +477,32 @@ export default function InvoicingPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [products, setProducts] = useState<InventoryItem[]>([]);
 
-  const fetchInvoicesData = useCallback(async () => {
+  const fetchPageData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await getInvoicesService(); // Get all invoices
-      setAllInvoices(data);
+      const [invoicesData, contactsData, productsData] = await Promise.all([
+        getInvoicesService(), 
+        getContacts(),
+        getInventoryItems()
+      ]);
+      setAllInvoices(invoicesData);
+      setContacts(contactsData);
+      setProducts(productsData);
     } catch (error) {
-      console.error("Failed to fetch invoices:", error);
-      toast({ variant: "destructive", title: "خطأ", description: "فشل تحميل بيانات الفواتير." });
+      console.error("Failed to fetch page data:", error);
+      toast({ variant: "destructive", title: "خطأ", description: "فشل تحميل البيانات اللازمة لصفحة الفواتير." });
     } finally {
       setIsLoading(false);
     }
   }, [toast]);
   
-  const fetchRequiredDataForDialog = useCallback(async () => {
-    try {
-      const [contactsData, productsData] = await Promise.all([
-        getContacts(),
-        getInventoryItems()
-      ]);
-      setContacts(contactsData);
-      setProducts(productsData);
-    } catch (error) {
-      toast({ variant: "destructive", title: "خطأ", description: "فشل تحميل البيانات اللازمة لإنشاء الفاتورة." });
-    }
-  }, [toast]);
-
-
   useEffect(() => {
-    fetchInvoicesData();
-    fetchRequiredDataForDialog();
-  }, [fetchInvoicesData, fetchRequiredDataForDialog]);
+    fetchPageData();
+  }, [fetchPageData]);
 
   const handleOpenAddDialog = () => {
     setEditingInvoice(null);
+    form.reset(); // Ensure form is reset for new entry
     setIsDialogOpen(true);
   };
 
@@ -432,29 +512,78 @@ export default function InvoicingPage() {
   };
 
   const handleDeleteInvoice = async (invoice: Invoice) => {
-     if (confirm(`هل أنت متأكد من حذف الفاتورة رقم ${invoice.invoiceNumber}؟`)) {
+     if (window.confirm(`هل أنت متأكد من حذف الفاتورة رقم ${invoice.invoiceNumber}؟ لا يمكن التراجع عن هذا الإجراء.`)) {
         try {
             await deleteInvoiceService(invoice.id);
             toast({ title: "تم الحذف", description: `تم حذف الفاتورة ${invoice.invoiceNumber}.` });
-            fetchInvoicesData(); // Refresh list
+            fetchPageData(); 
         } catch (error) {
             toast({ variant: "destructive", title: "خطأ في الحذف", description: "لم يتم حذف الفاتورة."});
         }
     }
   };
   const handleViewInvoice = (invoice: Invoice) => {
-    console.log("View invoice:", invoice.id);
-    toast({title: "عرض التفاصيل", description: `عرض تفاصيل الفاتورة ${invoice.invoiceNumber} (قيد التطوير)`});
+    // For now, just log and show toast. Future: open a detailed view dialog/page.
+    console.log("View invoice:", invoice);
+    setEditingInvoice(invoice); // Use the same dialog for viewing, but disable form fields
+    setIsDialogOpen(true); // This will need modification to the dialog to be a "view" mode
+    toast({title: "عرض التفاصيل", description: `عرض تفاصيل الفاتورة ${invoice.invoiceNumber} (النموذج الحالي يستخدم للتعديل).`});
   };
+
   const handlePrintInvoice = (invoice: Invoice) => {
     console.log("Print invoice:", invoice.id);
-     toast({title: "طباعة", description: `طباعة الفاتورة ${invoice.invoiceNumber} (قيد التطوير)`});
+    // Simplified print logic for now
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+        printWindow.document.write('<html><head><title>فاتورة</title>');
+        printWindow.document.write('<style> body { font-family: Arial, sans-serif; direction: rtl; margin: 20px; } table { width: 100%; border-collapse: collapse; margin-bottom: 20px; } th, td { border: 1px solid #ccc; padding: 8px; text-align: right; } .header { text-align: center; margin-bottom: 30px; } .total-section { margin-top: 20px; text-align: left; } .total-section p { margin: 5px 0; } </style>');
+        printWindow.document.write('</head><body>');
+        printWindow.document.write(`<div class="header"><h1>فاتورة ${typeMap[invoice.type]}</h1><h2>${invoice.invoiceNumber}</h2></div>`);
+        printWindow.document.write(`<p><strong>العميل/المورد:</strong> ${invoice.customerSupplierName}</p>`);
+        printWindow.document.write(`<p><strong>التاريخ:</strong> ${invoice.date}</p>`);
+        if(invoice.dueDate) printWindow.document.write(`<p><strong>تاريخ الاستحقاق:</strong> ${invoice.dueDate}</p>`);
+        
+        printWindow.document.write('<table><thead><tr><th>الصنف</th><th>الكمية</th><th>سعر الوحدة (ل.س)</th><th>الخصم (%)</th><th>الضريبة (%)</th><th>الإجمالي (ل.س)</th></tr></thead><tbody>');
+        invoice.items.forEach(item => {
+            const subTotal = item.quantity * item.unitPrice;
+            const discountAmount = subTotal * (item.discountRate || 0);
+            const priceAfterDiscount = subTotal - discountAmount;
+            const taxAmountItem = priceAfterDiscount * (item.taxRate || 0);
+            const totalItemPrice = priceAfterDiscount + taxAmountItem;
+            printWindow.document.write(`<tr>
+                <td>${item.productName}</td>
+                <td>${item.quantity}</td>
+                <td>${item.unitPrice.toFixed(2)}</td>
+                <td>${((item.discountRate || 0) * 100).toFixed(0)}%</td>
+                <td>${((item.taxRate || 0) * 100).toFixed(0)}%</td>
+                <td>${totalItemPrice.toFixed(2)}</td>
+            </tr>`);
+        });
+        printWindow.document.write('</tbody></table>');
+
+        printWindow.document.write('<div class="total-section">');
+        printWindow.document.write(`<p><strong>المبلغ قبل الضريبة:</strong> ${invoice.amount.toFixed(2)} ل.س</p>`);
+        printWindow.document.write(`<p><strong>مبلغ الضريبة:</strong> ${invoice.taxAmount.toFixed(2)} ل.س</p>`);
+        printWindow.document.write(`<p><strong>الإجمالي الكلي:</strong> ${invoice.totalAmount.toFixed(2)} ل.س</p>`);
+        printWindow.document.write('</div>');
+
+        if(invoice.notes) printWindow.document.write(`<p><strong>ملاحظات:</strong> ${invoice.notes}</p>`);
+        printWindow.document.write('</body></html>');
+        printWindow.document.close();
+        printWindow.focus(); // Necessary for some browsers
+        printWindow.print();
+        // printWindow.close(); // Optional: close after print
+    } else {
+        toast({title: "خطأ", description: "متصفحك منع فتح نافذة الطباعة."});
+    }
   };
 
   const salesInvoices = allInvoices.filter(inv => inv.type === "Sales");
   const purchaseInvoices = allInvoices.filter(inv => inv.type === "Purchase");
   const taxInvoices = allInvoices.filter(inv => inv.type === "Tax"); 
   const returnInvoices = allInvoices.filter(inv => inv.type === "Return");
+  // Assuming form is defined somewhere, or pass it if needed
+  const form = useForm<InvoiceFormData>(); // Placeholder if not defined globally
 
   return (
     <>
@@ -492,7 +621,7 @@ export default function InvoicingPage() {
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         invoice={editingInvoice}
-        onSave={fetchInvoicesData}
+        onSave={fetchPageData} // Use fetchPageData to refresh all necessary data
         contacts={contacts}
         products={products}
       />

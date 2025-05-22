@@ -9,8 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, Shield, Building2, Coins, Printer, Database, Edit, Trash2, PlusCircle, Filter, FileCog } from "lucide-react";
-import React, { useState } from 'react';
+import { Users, Shield, Building2, Coins, Printer, Database, Edit, Trash2, PlusCircle, Filter, FileCog, Save } from "lucide-react";
+import React, { useState, useEffect } from 'react';
 import {
   Select,
   SelectContent,
@@ -18,6 +18,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useToast } from "@/hooks/use-toast";
+
+// Mock data and services (replace with actual API calls later)
+// For now, settings will be local state or very simple mock service
+
+interface GeneralSettingsData {
+  companyName: string;
+  taxNumber?: string;
+  companyAddress?: string;
+  companyPhone?: string;
+  companyEmail?: string;
+  baseCurrency: string;
+  enableEInvoice: boolean;
+}
+
+const generalSettingsSchema = z.object({
+  companyName: z.string().min(1, "اسم الشركة مطلوب"),
+  taxNumber: z.string().optional(),
+  companyAddress: z.string().optional(),
+  companyPhone: z.string().optional(),
+  companyEmail: z.string().email("بريد إلكتروني غير صالح").optional().or(z.literal('')),
+  baseCurrency: z.string().min(1, "العملة الأساسية مطلوبة"),
+  enableEInvoice: z.boolean().default(false),
+});
+
 
 interface User {
   id: string;
@@ -39,18 +68,68 @@ interface CompanyBranch {
 
 interface Currency {
   id: string;
-  code: string; // e.g., USD, EUR, SAR
-  name: string; // e.g., US Dollar, Euro, Saudi Riyal
-  symbol: string; // e.g., $, €, ر.س
-  exchangeRateToBase: number; // Rate to the base currency
+  code: string; 
+  name: string; 
+  symbol: string; 
+  exchangeRateToBase: number; 
   isBaseCurrency: boolean;
 }
 
+// Mock data - In a real app, this would come from a database or API
+let mockUsers: User[] = [
+    {id: 'user1', username: 'admin', fullName: 'المدير العام', email: 'admin@alwaseet.pro', role: 'مدير', isActive: true, lastLogin: '15/07/2024 10:00 ص'},
+    {id: 'user2', username: 'accountant1', fullName: 'المحاسب الأول', email: 'accountant@alwaseet.pro', role: 'محاسب', isActive: true, lastLogin: '14/07/2024 03:30 م'},
+];
+let mockBranches: CompanyBranch[] = [
+    {id: 'branch1', name: 'الفرع الرئيسي', address: 'شارع الملك عبد العزيز، الرياض', phone: '011-1234567', isMain: true},
+    {id: 'branch2', name: 'مستودع جدة', address: 'المنطقة الصناعية، جدة', phone: '012-9876543', isMain: false},
+];
+let mockCurrencies: Currency[] = [
+    {id: 'curr1', code: 'SYP', name: 'ليرة سورية', symbol: 'ل.س', exchangeRateToBase: 1, isBaseCurrency: true},
+    {id: 'curr2', code: 'USD', name: 'دولار أمريكي', symbol: '$', exchangeRateToBase: 15000, isBaseCurrency: false},
+    {id: 'curr3', code: 'EUR', name: 'يورو', symbol: '€', exchangeRateToBase: 16000, isBaseCurrency: false},
+    {id: 'curr4', code: 'TRY', name: 'ليرة تركية', symbol: '₺', exchangeRateToBase: 450, isBaseCurrency: false},
+    {id: 'curr5', code: 'SAR', name: 'ريال سعودي', symbol: 'ر.س', exchangeRateToBase: 4000, isBaseCurrency: false},
+];
+
+
 export default function SettingsPage() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [branches, setBranches] = useState<CompanyBranch[]>([]);
-  const [currencies, setCurrencies] = useState<Currency[]>([]);
-  // TODO: Add state for general settings, invoice settings, etc.
+  const [users, setUsers] = useState<User[]>(mockUsers);
+  const [branches, setBranches] = useState<CompanyBranch[]>(mockBranches);
+  const [currencies, setCurrencies] = useState<Currency[]>(mockCurrencies);
+  const { toast } = useToast();
+
+  const form = useForm<GeneralSettingsData>({
+    resolver: zodResolver(generalSettingsSchema),
+    defaultValues: { // Load these from an API or a settings service in a real app
+      companyName: "شركة الوسيط برو (الافتراضية)",
+      taxNumber: "",
+      companyAddress: "غير محدد",
+      companyPhone: "",
+      companyEmail: "info@alwaseet.pro",
+      baseCurrency: "SYP", // Syrian Pound as default
+      enableEInvoice: true,
+    },
+  });
+  
+  // Simulate fetching settings on mount
+  useEffect(() => {
+    // In a real app, fetch settings from a service and use form.reset(fetchedData)
+    console.log("Settings page mounted. Current form values:", form.getValues());
+  }, [form]);
+
+  const onSubmitGeneralSettings = async (data: GeneralSettingsData) => {
+    console.log("Saving general settings:", data);
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 500));
+    // Update local state or re-fetch if using a real service
+    form.reset(data); // Keep form updated with saved data
+    toast({
+      title: "تم الحفظ بنجاح",
+      description: "تم تحديث الإعدادات العامة للشركة.",
+    });
+  };
+
 
   return (
     <>
@@ -70,56 +149,133 @@ export default function SettingsPage() {
 
         <TabsContent value="general">
           <Card className="shadow-lg">
-            <CardHeader>
-              <CardTitle>إعدادات الشركة العامة</CardTitle>
-              <CardDescription>تكوين معلومات الشركة الأساسية وتفضيلات النظام.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="companyName">اسم الشركة</Label>
-                  <Input id="companyName" defaultValue="شركة الوسيط برو النموذجية" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="taxNumber">الرقم الضريبي</Label>
-                  <Input id="taxNumber" placeholder="أدخل الرقم الضريبي" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="companyAddress">عنوان الشركة</Label>
-                <Input id="companyAddress" placeholder="شارع الأمير محمد، الرياض" />
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
-                 <div className="space-y-2">
-                    <Label htmlFor="companyPhone">هاتف الشركة</Label>
-                    <Input id="companyPhone" type="tel" placeholder="+966..." />
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmitGeneralSettings)}>
+                <CardHeader>
+                  <CardTitle>إعدادات الشركة العامة</CardTitle>
+                  <CardDescription>تكوين معلومات الشركة الأساسية وتفضيلات النظام.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <FormField
+                    control={form.control}
+                    name="companyName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>اسم الشركة</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <FormField
+                      control={form.control}
+                      name="taxNumber"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>الرقم الضريبي</FormLabel>
+                          <FormControl>
+                            <Input placeholder="أدخل الرقم الضريبي" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="baseCurrency"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>العملة الأساسية للنظام</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value} dir="rtl">
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="اختر العملة الأساسية" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="SYP">ليرة سورية (SYP)</SelectItem>
+                              <SelectItem value="TRY">ليرة تركية (TRY)</SelectItem>
+                              <SelectItem value="SAR">ريال سعودي (SAR)</SelectItem>
+                              <SelectItem value="USD">دولار أمريكي (USD)</SelectItem>
+                              <SelectItem value="EUR">يورو (EUR)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="companyEmail">البريد الإلكتروني للشركة</Label>
-                    <Input id="companyEmail" type="email" placeholder="info@alwaseet.pro" />
+                  <FormField
+                    control={form.control}
+                    name="companyAddress"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>عنوان الشركة</FormLabel>
+                        <FormControl>
+                           <Input placeholder="شارع الأمير محمد، الرياض" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <FormField
+                      control={form.control}
+                      name="companyPhone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>هاتف الشركة</FormLabel>
+                          <FormControl>
+                            <Input type="tel" placeholder="+963..." {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="companyEmail"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>البريد الإلكتروني للشركة</FormLabel>
+                          <FormControl>
+                            <Input type="email" placeholder="info@alwaseet.pro" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
-              </div>
-               <div className="space-y-2">
-                  <Label htmlFor="baseCurrency">العملة الأساسية للنظام</Label>
-                  <Select dir="rtl" defaultValue="SAR">
-                    <SelectTrigger id="baseCurrency">
-                      <SelectValue placeholder="اختر العملة الأساسية" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="SAR">ريال سعودي (SAR)</SelectItem>
-                      <SelectItem value="USD">دولار أمريكي (USD)</SelectItem>
-                      <SelectItem value="EUR">يورو (EUR)</SelectItem>
-                      <SelectItem value="SYP">ليرة سورية (SYP)</SelectItem>
-                      <SelectItem value="TRY">ليرة تركية (TRY)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center space-x-2 space-x-reverse">
-                    <Switch id="enable-einv" />
-                    <Label htmlFor="enable-einv" className="text-base">تفعيل نظام الفوترة الإلكترونية (حسب الدولة)</Label>
-                </div>
-              <Button>حفظ الإعدادات العامة</Button>
-            </CardContent>
+                  <FormField
+                    control={form.control}
+                    name="enableEInvoice"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                        <div className="space-y-0.5">
+                          <FormLabel>تفعيل نظام الفوترة الإلكترونية</FormLabel>
+                          <FormDescription>
+                            (يعتمد على متطلبات بلدك وقوانين الضرائب)
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <Button type="submit" disabled={form.formState.isSubmitting}>
+                    <Save className="ml-2 h-4 w-4"/>
+                    {form.formState.isSubmitting ? "جاري الحفظ..." : "حفظ الإعدادات العامة"}
+                  </Button>
+                </CardContent>
+              </form>
+            </Form>
           </Card>
         </TabsContent>
 
@@ -253,7 +409,7 @@ export default function SettingsPage() {
                         <TableCell className="font-medium">{currency.code}</TableCell>
                         <TableCell>{currency.name}</TableCell>
                         <TableCell>{currency.symbol}</TableCell>
-                        <TableCell className="text-left">{currency.isBaseCurrency ? "-" : currency.exchangeRateToBase.toFixed(4)}</TableCell>
+                        <TableCell className="text-left">{currency.isBaseCurrency ? "-" : currency.exchangeRateToBase.toFixed(currency.code === 'USD' || currency.code === 'EUR' ? 2 : 0)}</TableCell>
                         <TableCell>{currency.isBaseCurrency ? <Badge>أساسية</Badge> : "لا"}</TableCell>
                         <TableCell className="text-center space-x-1">
                            <Button variant="ghost" size="icon" title="تعديل سعر الصرف"><Edit className="h-4 w-4" /></Button>
