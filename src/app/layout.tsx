@@ -1,18 +1,9 @@
 import type { Metadata } from "next";
-import { GeistSans, GeistMono } from "next/font/google"; // Corrected font import
+import { GeistSans } from 'geist/font/sans';
+import { GeistMono } from 'geist/font/mono';
 import "./globals.css";
 import { AppShell } from "@/components/layout/app-shell";
-import { Toaster } from "@/components/ui/toaster"; // Added Toaster
-
-const geistSans = GeistSans({ // Corrected usage
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = GeistMono({ // Corrected usage
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
   title: "Al Waseet Pro",
@@ -27,7 +18,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
+        className={`${GeistSans.variable} ${GeistMono.variable} font-sans antialiased`}
       >
         <AppShell>{children}</AppShell>
         <Toaster />
