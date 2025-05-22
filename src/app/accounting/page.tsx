@@ -1,3 +1,4 @@
+
 "use client";
 
 import { PageHeader } from "@/components/page-header";
@@ -5,18 +6,26 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PlusCircle, Edit, Trash2, Search, Filter, Landmark } from "lucide-react"; // Added Landmark for Cost Centers
+import { PlusCircle, Edit, Trash2, Search, Filter, Landmark, BookOpen, FileArchive } from "lucide-react"; 
 import React, { useState } from 'react';
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 
 interface JournalEntry {
   id: string;
   date: string;
   description: string;
+  reference?: string; 
+  isPosted: boolean; // هل تم ترحيل القيد
+  details: JournalEntryDetail[];
+}
+
+interface JournalEntryDetail {
+  accountId: string;
+  accountName?: string; // For display
   debit: number | null;
   credit: number | null;
-  account: string;
-  reference?: string; 
+  costCenterId?: string; 
 }
 
 interface Account {
@@ -25,7 +34,9 @@ interface Account {
   name: string;
   type: "أصول" | "التزامات" | "حقوق ملكية" | "إيرادات" | "مصروفات"; 
   balance: number;
-  parentAccount?: string;
+  parentAccountId?: string;
+  parentAccountName?: string; // For display
+  isMain: boolean; // هل هو حساب رئيسي أم فرعي
 }
 
 interface CostCenter {
@@ -41,12 +52,13 @@ export default function AccountingPage() {
   const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
 
   // TODO: Implement fetching, adding, editing, deleting logic
+  // TODO: Implement dialogs for adding/editing entries
 
   return (
     <>
       <PageHeader 
         title="نظام المحاسبة المتكامل" 
-        description="إدارة قيود اليومية اليومية، شجرة الحسابات، مراكز التكلفة، والتقارير المالية."
+        description="إدارة قيود اليومية، شجرة الحسابات، مراكز التكلفة، والتقارير المالية."
         actions={
           <Button>
             <PlusCircle className="ml-2 h-4 w-4" /> إضافة قيد يومية جديد
@@ -55,10 +67,11 @@ export default function AccountingPage() {
       />
 
       <Tabs defaultValue="journal" dir="rtl" className="mt-6">
-        <TabsList className="grid w-full grid-cols-3 md:w-[500px] mb-4">
-          <TabsTrigger value="journal" className="text-base py-2.5">قيود اليومية</TabsTrigger>
-          <TabsTrigger value="accounts" className="text-base py-2.5">شجرة الحسابات</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-4 mb-4">
+          <TabsTrigger value="journal" className="text-base py-2.5 flex items-center gap-1"><BookOpen className="h-4 w-4"/>قيود اليومية</TabsTrigger>
+          <TabsTrigger value="accounts" className="text-base py-2.5 flex items-center gap-1"><FileArchive className="h-4 w-4"/>شجرة الحسابات</TabsTrigger>
           <TabsTrigger value="costCenters" className="text-base py-2.5 flex items-center gap-1"><Landmark className="h-4 w-4"/>مراكز التكلفة</TabsTrigger>
+          {/* A new tab for financial reports could be added here, linking to /reports or a section within */}
         </TabsList>
 
         <TabsContent value="journal">
@@ -79,31 +92,45 @@ export default function AccountingPage() {
                       <TableHead>التاريخ</TableHead>
                       <TableHead>رقم المرجع</TableHead>
                       <TableHead>الوصف</TableHead>
-                      <TableHead>الحساب</TableHead>
-                      <TableHead className="text-left">مدين (ر.س)</TableHead>
-                      <TableHead className="text-left">دائن (ر.س)</TableHead>
+                      <TableHead>الحسابات</TableHead>
+                      <TableHead className="text-left">إجمالي مدين (ر.س)</TableHead>
+                      <TableHead className="text-left">إجمالي دائن (ر.س)</TableHead>
+                      <TableHead className="text-center">الحالة</TableHead>
                       <TableHead className="text-center">الإجراءات</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {journalEntries.map((entry) => (
+                    {journalEntries.map((entry) => {
+                      const totalDebit = entry.details.reduce((sum, d) => sum + (d.debit || 0), 0);
+                      const totalCredit = entry.details.reduce((sum, d) => sum + (d.credit || 0), 0);
+                      return (
                       <TableRow key={entry.id}>
                         <TableCell>{entry.date}</TableCell>
                         <TableCell>{entry.reference || "-"}</TableCell>
                         <TableCell>{entry.description}</TableCell>
-                        <TableCell>{entry.account}</TableCell>
-                        <TableCell className="text-left">{entry.debit ? `${entry.debit.toFixed(2)}` : "-"}</TableCell>
-                        <TableCell className="text-left">{entry.credit ? `${entry.credit.toFixed(2)}` : "-"}</TableCell>
+                        <TableCell className="text-xs">
+                          {entry.details.map(d => `${d.accountName || d.accountId} (${d.debit ? 'مدين' : 'دائن'}: ${d.debit || d.credit})`).join(', ')}
+                        </TableCell>
+                        <TableCell className="text-left">{totalDebit.toFixed(2)}</TableCell>
+                        <TableCell className="text-left">{totalCredit.toFixed(2)}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant={entry.isPosted ? "default" : "outline"}>{entry.isPosted ? "مرحّل" : "غير مرحّل"}</Badge>
+                        </TableCell>
                         <TableCell className="text-center space-x-1">
-                          <Button variant="ghost" size="icon" title="تعديل القيد">
+                          <Button variant="ghost" size="icon" title="تعديل القيد" disabled={entry.isPosted}>
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" title="حذف القيد" className="text-destructive hover:text-destructive">
+                          <Button variant="ghost" size="icon" title="حذف القيد" className="text-destructive hover:text-destructive"  disabled={entry.isPosted}>
                             <Trash2 className="h-4 w-4" />
+                          </Button>
+                           <Button variant="ghost" size="icon" title={entry.isPosted ? "إلغاء ترحيل" : "ترحيل القيد"} >
+                             {/* Icon changes based on state */}
+                            {entry.isPosted ? <FileArchive className="h-4 w-4 text-yellow-600"/> : <FileArchive className="h-4 w-4 text-green-600"/>}
                           </Button>
                         </TableCell>
                       </TableRow>
-                    ))}
+                    );
+                  })}
                   </TableBody>
                 </Table>
               ) : (
@@ -136,23 +163,27 @@ export default function AccountingPage() {
                       <TableHead>اسم الحساب</TableHead>
                       <TableHead>نوع الحساب</TableHead>
                       <TableHead>الحساب الرئيسي</TableHead>
+                      <TableHead>طبيعة الحساب</TableHead> {/* مدين/دائن */}
                       <TableHead className="text-left">الرصيد (ر.س)</TableHead>
                       <TableHead className="text-center">الإجراءات</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {chartOfAccountsData.map((account) => (
-                      <TableRow key={account.id}>
-                        <TableCell>{account.code}</TableCell>
-                        <TableCell className="font-medium">{account.name}</TableCell>
+                      <TableRow key={account.id} className={account.isMain ? "bg-muted/50 font-semibold" : ""}>
+                        <TableCell style={{ paddingRight: account.parentAccountId ? '2rem' : '1rem' }}> {/* Basic indentation */}
+                          {account.code}
+                        </TableCell>
+                        <TableCell>{account.name}</TableCell>
                         <TableCell>{account.type}</TableCell>
-                        <TableCell>{account.parentAccount || "-"}</TableCell>
+                        <TableCell>{account.parentAccountName || (account.parentAccountId ? "غير محدد" : "-")}</TableCell>
+                        <TableCell>{(account.type === "أصول" || account.type === "مصروفات") ? "مدين" : "دائن"}</TableCell>
                         <TableCell className="text-left">{account.balance.toFixed(2)}</TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center space-x-1">
                           <Button variant="ghost" size="icon" title="تعديل الحساب">
                             <Edit className="h-4 w-4" />
                           </Button>
-                           <Button variant="ghost" size="icon" title="حذف الحساب" className="text-destructive hover:text-destructive">
+                           <Button variant="ghost" size="icon" title="حذف الحساب" className="text-destructive hover:text-destructive" disabled={account.balance !== 0 || chartOfAccountsData.some(c => c.parentAccountId === account.id)}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </TableCell>
@@ -198,7 +229,7 @@ export default function AccountingPage() {
                         <TableCell>{center.code}</TableCell>
                         <TableCell className="font-medium">{center.name}</TableCell>
                         <TableCell>{center.description || "-"}</TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center space-x-1">
                           <Button variant="ghost" size="icon" title="تعديل مركز التكلفة">
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -224,5 +255,3 @@ export default function AccountingPage() {
     </>
   );
 }
-
-    

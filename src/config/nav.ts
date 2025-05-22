@@ -1,5 +1,6 @@
+
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, BookOpenText, FileText, Zap, Barcode, Warehouse, Users, Settings, LogIn } from "lucide-react";
+import { LayoutDashboard, BookOpenText, FileText, Zap, Barcode, Warehouse, Users, Settings, LogIn, Landmark, BarChart3, Building2, Coins } from "lucide-react";
 
 export interface NavItem {
   href: string;
@@ -17,19 +18,25 @@ export const navItems: NavItem[] = [
   },
   {
     href: "/accounting",
-    label: "المحاسبة",
+    label: "المحاسبة العامة",
     icon: BookOpenText,
     group: "المالية",
   },
   {
     href: "/invoicing",
-    label: "الفوترة",
+    label: "الفواتير والمبيعات",
     icon: FileText,
     group: "المالية",
   },
   {
+    href: "/banking",
+    label: "الشؤون المالية والبنوك",
+    icon: Landmark,
+    group: "المالية",
+  },
+  {
     href: "/fast-invoice",
-    label: "فاتورة سريعة",
+    label: "نقطة بيع سريعة",
     icon: Zap,
     group: "العمليات",
   },
@@ -41,27 +48,32 @@ export const navItems: NavItem[] = [
   },
   {
     href: "/inventory",
-    label: "المخزون",
+    label: "إدارة المخزون",
     icon: Warehouse,
     group: "العمليات",
   },
   {
     href: "/contacts",
-    label: "جهات الاتصال",
+    label: "إدارة العملاء والموردين",
     icon: Users,
     group: "الإدارة",
+  },
+  {
+    href: "/reports",
+    label: "التقارير والتحليلات",
+    icon: BarChart3,
+    group: "الإدارة",
+  },
+  {
+    href: "/settings",
+    label: "الإعدادات والتخصيص",
+    icon: Settings,
+    group: "النظام",
   },
   // {
   //   href: "/login",
   //   label: "تسجيل الدخول",
   //   icon: LogIn,
-  //   group: "النظام",
-  // }
-  // Example of a settings link, can be removed or adapted
-  // {
-  //   href: "/settings",
-  //   label: "الإعدادات",
-  //   icon: Settings,
   //   group: "النظام",
   // }
 ];
