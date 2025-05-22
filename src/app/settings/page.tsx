@@ -109,6 +109,8 @@ export default function SettingsPage() {
                       <SelectItem value="SAR">ريال سعودي (SAR)</SelectItem>
                       <SelectItem value="USD">دولار أمريكي (USD)</SelectItem>
                       <SelectItem value="EUR">يورو (EUR)</SelectItem>
+                      <SelectItem value="SYP">ليرة سورية (SYP)</SelectItem>
+                      <SelectItem value="TRY">ليرة تركية (TRY)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
