@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Briefcase, ChevronDown, ChevronUp, LogOut, User, Settings, CreditCard } from "lucide-react"; // Added icons
+import { Briefcase, ChevronDown, User, Settings, CreditCard, LogOut } from "lucide-react"; 
 import {
   SidebarProvider,
   Sidebar,
@@ -15,7 +15,6 @@ import {
   SidebarMenuButton,
   SidebarInset,
   SidebarTrigger,
-  useSidebar,
   SidebarGroup,
   SidebarGroupLabel,
   SidebarGroupContent,
@@ -45,8 +44,13 @@ interface GroupedNavItems {
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
 
+  // Hide sidebar and app shell structure for login page
+  if (pathname === "/login") {
+    return <>{children}</>;
+  }
+
   const groupedItems = navItems.reduce((acc, item) => {
-    const groupName = item.group || "عام"; // Default group name in Arabic
+    const groupName = item.group || "عام"; 
     if (!acc[groupName]) {
       acc[groupName] = [];
     }
@@ -56,7 +60,7 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <SidebarProvider defaultOpen>
-      <Sidebar>
+      <Sidebar side="right"> {/* Sidebar on the right */}
         <SidebarHeader className="p-4">
           <Link href="/" className="flex items-center gap-2">
             <Briefcase className="h-8 w-8 text-primary" />
@@ -70,7 +74,7 @@ export function AppShell({ children }: AppShellProps) {
             <SidebarMenu>
               {Object.entries(groupedItems).map(([groupName, items]) => (
                 <SidebarGroup key={groupName}>
-                  <SidebarGroupLabel className="group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+                  <SidebarGroupLabel className="group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 text-sidebar-foreground/70">
                     {groupName}
                   </SidebarGroupLabel>
                   <SidebarGroupContent>
@@ -80,6 +84,7 @@ export function AppShell({ children }: AppShellProps) {
                           asChild
                           isActive={pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href))}
                           tooltip={{ children: item.label, side: "left", className: "bg-primary text-primary-foreground" }}
+                          className="text-sidebar-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                         >
                           <Link href={item.href}>
                             <item.icon />
@@ -94,16 +99,16 @@ export function AppShell({ children }: AppShellProps) {
             </SidebarMenu>
           </SidebarContent>
         </ScrollArea>
-        <SidebarFooter className="p-2">
+        <SidebarFooter className="p-2 border-t border-sidebar-border">
            <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="w-full justify-start items-center gap-2 p-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-auto">
+              <Button variant="ghost" className="w-full justify-start items-center gap-2 p-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-auto hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
                 <Avatar className="h-8 w-8">
-                  {/* Removed placeholder AvatarImage, relying on Fallback */}
-                  <AvatarFallback>م ض</AvatarFallback> {/* Example: Admin User initials in Arabic */}
+                  <AvatarImage src="https://placehold.co/100x100.png" alt="صورة المستخدم" data-ai-hint="user avatar" />
+                  <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground">م ض</AvatarFallback> 
                 </Avatar>
                 <span className="text-sidebar-foreground group-data-[collapsible=icon]:hidden">المستخدم المسؤول</span>
-                <ChevronDown className="mr-auto h-4 w-4 text-sidebar-foreground group-data-[collapsible=icon]:hidden" />
+                <ChevronDown className="ml-auto h-4 w-4 text-sidebar-foreground group-data-[collapsible=icon]:hidden" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent side="top" align="start" className="w-56" dir="rtl">
@@ -122,7 +127,7 @@ export function AppShell({ children }: AppShellProps) {
                 <span>الإعدادات</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { /* TODO: Implement logout logic */ console.log("Logout clicked"); }}>
                 <LogOut className="ml-2 h-4 w-4" />
                 <span>تسجيل الخروج</span>
               </DropdownMenuItem>
@@ -133,7 +138,6 @@ export function AppShell({ children }: AppShellProps) {
       <SidebarInset className="flex flex-col">
         <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:h-16 sm:px-6 md:px-8">
            <SidebarTrigger className="md:hidden" />
-           {/* Current Page Title could be dynamically set here using a context or prop */}
         </header>
         <main className="flex-1 overflow-auto p-4 sm:p-6 md:p-8">
           {children}

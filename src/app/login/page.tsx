@@ -4,47 +4,62 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LogIn } from "lucide-react";
+import { LogIn, ShieldCheck } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation"; // Import for navigation
+import React, { useState } from "react"; // Import React for FormEvent type
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("admin");
+  const [password, setPassword] = useState("admin123");
+  const [error, setError] = useState("");
+  const router = useRouter(); // Initialize router
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement login logic
-    console.log("Login attempt with:", { email, password });
+    setError(""); // Clear previous errors
+
+    // TODO: Implement actual login logic here
+    // For now, simulate login and redirect to dashboard if credentials are correct
+    if (username === "admin" && password === "admin123") {
+      console.log("Login successful with:", { username, password });
+      // Redirect to dashboard or home page upon successful login
+      router.push("/"); 
+    } else {
+      console.log("Login failed");
+      setError("اسم المستخدم أو كلمة المرور غير صحيحة.");
+    }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-background p-4">
-      <Card className="w-full max-w-md shadow-2xl">
-        <CardHeader className="text-center space-y-2">
-          <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-2">
-            <LogIn className="h-10 w-10 text-primary" />
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/30 via-background to-secondary/30 p-4">
+      <Card className="w-full max-w-md shadow-2xl border-none overflow-hidden bg-card/90 backdrop-blur-sm">
+        <CardHeader className="text-center space-y-3 p-8 bg-primary/10">
+          <div className="mx-auto bg-primary text-primary-foreground p-4 rounded-full w-fit shadow-lg">
+            <ShieldCheck className="h-12 w-12" />
           </div>
-          <CardTitle className="text-3xl">تسجيل الدخول</CardTitle>
-          <CardDescription>أدخل بيانات حسابك للمتابعة إلى الوسيط برو</CardDescription>
+          <CardTitle className="text-3xl font-bold text-foreground">مرحباً بك في الوسيط برو</CardTitle>
+          <CardDescription className="text-muted-foreground text-base">
+            سجل الدخول للوصول إلى نظام إدارة أعمالك المتكامل.
+          </CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 p-8">
             <div className="space-y-2">
-              <Label htmlFor="email">البريد الإلكتروني أو اسم المستخدم</Label>
+              <Label htmlFor="username" className="text-base font-medium">اسم المستخدم</Label>
               <Input 
-                id="email" 
-                type="email" 
-                placeholder="example@mail.com" 
+                id="username" 
+                type="text" 
+                placeholder="أدخل اسم المستخدم الخاص بك" 
                 required 
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="bg-card-foreground/5 border-border focus:bg-card-foreground/10"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="bg-background/70 border-border focus:border-primary text-base py-3"
               />
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="password">كلمة المرور</Label>
+                <Label htmlFor="password" className="text-base font-medium">كلمة المرور</Label>
                 <Link href="#" className="text-sm text-primary hover:underline">
                   هل نسيت كلمة المرور؟
                 </Link>
@@ -52,16 +67,19 @@ export default function LoginPage() {
               <Input 
                 id="password" 
                 type="password" 
-                placeholder="********" 
+                placeholder="أدخل كلمة المرور" 
                 required 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="bg-card-foreground/5 border-border focus:bg-card-foreground/10"
+                className="bg-background/70 border-border focus:border-primary text-base py-3"
               />
             </div>
+            {error && (
+              <p className="text-sm font-medium text-destructive text-center">{error}</p>
+            )}
           </CardContent>
-          <CardFooter className="flex flex-col gap-4">
-            <Button type="submit" className="w-full text-lg py-6">
+          <CardFooter className="flex flex-col gap-4 p-8 pt-0">
+            <Button type="submit" className="w-full text-lg py-6 shadow-md hover:shadow-lg transition-shadow">
               <LogIn className="mr-2 h-5 w-5" /> تسجيل الدخول
             </Button>
             <p className="text-center text-sm text-muted-foreground">

@@ -1,93 +1,139 @@
 "use client";
 
 import { PageHeader } from "@/components/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DollarSign, Users, Package, AlertTriangle, TrendingUp, TrendingDown, Activity, Link as LinkIcon } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { DollarSign, Users, Package, AlertTriangle, TrendingUp, TrendingDown, Activity, Link as LinkIcon, BarChart2, PieChart as PieChartIcon, FileText } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Button } from "@/components/ui/button"; // Added Button import
+import { Button } from "@/components/ui/button";
+import Link from "next/link"; // Import Link for navigation
+import React from 'react';
 
-// Data is now expected to come from state or props
-// const kpiData = []; 
-// const salesData = [];
-// const expenseData = [];
-// const recentActivities = [];
-// const quickLinks = [];
+interface KpiCardProps {
+  title: string;
+  value: string | number;
+  icon: React.ElementType;
+  trend?: "up" | "down" | "neutral";
+  change?: string;
+  isLoading?: boolean;
+  description?: string;
+}
+
+const KpiCard: React.FC<KpiCardProps> = ({ title, value, icon: Icon, trend, change, isLoading, description }) => (
+  <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
+    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardTitle className="text-sm font-medium text-muted-foreground">
+        {title}
+      </CardTitle>
+      <Icon className="h-5 w-5 text-primary" />
+    </CardHeader>
+    <CardContent>
+      {isLoading ? (
+        <div className="text-2xl font-bold text-foreground animate-pulse">تحميل...</div>
+      ) : (
+        <div className="text-2xl font-bold text-foreground">{value}</div>
+      )}
+      {description && !isLoading && <p className="text-xs text-muted-foreground pt-1">{description}</p>}
+      {change && !isLoading && (
+        <p className={`text-xs ${trend === 'up' ? 'text-green-600' : trend === 'down' ? 'text-red-600' : 'text-muted-foreground'} flex items-center pt-1`}>
+          {trend === 'up' ? <TrendingUp className="h-3 w-3 ml-1" /> : trend === 'down' ? <TrendingDown className="h-3 w-3 ml-1" /> : null}
+          {change}
+        </p>
+      )}
+    </CardContent>
+  </Card>
+);
+
 
 export default function DashboardPage() {
   // In a real app, this data would come from API calls and be stored in state
-  const kpiData: { title: string; value: string; icon: React.ElementType; trend?: "up" | "down" | "neutral"; change?: string }[] = [
-    // Example structure, data should be fetched
-    // { title: "إجمالي الإيرادات", value: "0 ر.س", icon: DollarSign, trend: "neutral", change: "0%" },
-    // { title: "عملاء جدد", value: "0", icon: Users, trend: "neutral", change: "0%" },
+  const kpiData: KpiCardProps[] = [
+    { title: "إجمالي الإيرادات", value: "0 ر.س", icon: DollarSign, description: "الشهر الحالي", trend: "neutral", change: "+0% عن الشهر الماضي" },
+    { title: "المصروفات", value: "0 ر.س", icon: TrendingDown, description: "الشهر الحالي", trend: "neutral", change: "+0% عن الشهر الماضي" },
+    { title: "صافي الربح", value: "0 ر.س", icon: DollarSign, description: "الشهر الحالي", trend: "neutral", change: "+0% عن الشهر الماضي" },
+    { title: "عدد العملاء", value: "0", icon: Users, description: "إجمالي العملاء النشطين" },
+    { title: "الفواتير المستحقة", value: "0 ر.س", icon: FileText, description: "مبالغ لم يتم تحصيلها" },
+    { title: "قيمة المخزون", value: "0 ر.س", icon: Package, description: "التكلفة الإجمالية للمخزون" },
+    { title: "المنتجات منخفضة المخزون", value: "0", icon: AlertTriangle, description: "تحتاج إلى إعادة طلب" },
+    { title: "متوسط قيمة الفاتورة", value: "0 ر.س", icon: BarChart2, description: "متوسط قيمة كل عملية بيع" },
   ];
-  const salesData: { name: string; sales: number }[] = [];
-  const expenseData: { name: string; value: number; color: string }[] = [];
-  const recentActivities: string[] = [];
-  const quickLinks: { label: string; href: string }[] = [];
+  
+  // Placeholder data for charts, replace with actual data fetching
+  const salesData: { name: string; sales: number }[] = [
+    // { name: 'يناير', sales: 0 }, { name: 'فبراير', sales: 0 }, { name: 'مارس', sales: 0 }, 
+    // { name: 'ابريل', sales: 0 }, { name: 'مايو', sales: 0 }, { name: 'يونيو', sales: 0 }
+  ];
+  const expenseData: { name: string; value: number; color: string }[] = [
+    // { name: 'إيجار', value: 0, color: 'hsl(var(--chart-1))' },
+    // { name: 'تسويق', value: 0, color: 'hsl(var(--chart-2))' },
+    // { name: 'رواتب', value: 0, color: 'hsl(var(--chart-3))' },
+    // { name: 'مستلزمات', value: 0, color: 'hsl(var(--chart-4))' },
+  ];
+  
+  const recentActivities: {text: string; time: string; icon: React.ElementType}[] = [
+    // { text: "تم إنشاء فاتورة جديدة #INV001", time: "منذ 5 دقائق", icon: FileText },
+    // { text: "تم إضافة عميل جديد: شركة الأمل", time: "منذ ساعة", icon: Users },
+    // { text: "تنبيه: مخزون منتج 'سكر' منخفض", time: "منذ 3 ساعات", icon: AlertTriangle },
+  ];
+  
+  const quickLinks: { label: string; href: string; icon: React.ElementType }[] = [
+    { label: "إنشاء فاتورة جديدة", href: "/invoicing", icon: FileText },
+    { label: "إضافة عميل جديد", href: "/contacts", icon: Users },
+    { label: "عرض تقرير المبيعات", href: "#", icon: BarChart2 }, // Replace # with actual report link
+    { label: "إدارة المخزون", href: "/inventory", icon: Package },
+  ];
 
 
   return (
     <>
-      <PageHeader title="لوحة التحكم" description="نظرة عامة على أداء عملك." />
+      <PageHeader title="لوحة التحكم الرئيسية" description="نظرة عامة وشاملة على أداء أعمالك ومؤشراتك الرئيسية." />
       
-      {kpiData.length > 0 ? (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-6">
-          {kpiData.map((kpi) => (
-            <Card key={kpi.title} className="shadow-lg hover:shadow-xl transition-shadow duration-300">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {kpi.title}
-                </CardTitle>
-                <kpi.icon className="h-5 w-5 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-foreground">{kpi.value}</div>
-                {kpi.change && (
-                  <p className={`text-xs ${kpi.trend === 'up' ? 'text-green-500' : kpi.trend === 'down' ? 'text-red-500' : 'text-muted-foreground'} flex items-center`}>
-                    {kpi.trend === 'up' ? <TrendingUp className="h-3 w-3 ml-1" /> : kpi.trend === 'down' ? <TrendingDown className="h-3 w-3 ml-1" /> : null}
-                    {kpi.change} مقارنة بالشهر الماضي
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <Card className="mb-6 shadow-lg">
-          <CardContent className="pt-6">
-            <p className="text-center text-muted-foreground">لا توجد مؤشرات أداء رئيسية لعرضها حالياً.</p>
-          </CardContent>
-        </Card>
-      )}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+        {kpiData.map((kpi, index) => (
+          <KpiCard key={index} {...kpi} />
+        ))}
+      </div>
+      
+      {kpiData.length === 0 && (
+         <Card className="mb-6 shadow-lg">
+           <CardContent className="pt-6">
+             <p className="text-center text-muted-foreground py-8">لا توجد مؤشرات أداء رئيسية لعرضها حالياً. قم بإعداد النظام لعرض البيانات.</p>
+           </CardContent>
+         </Card>
+       )}
 
       <div className="grid gap-6 md:grid-cols-2 mb-6">
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle>نظرة عامة على المبيعات</CardTitle>
+            <CardTitle className="flex items-center"><BarChart2 className="ml-2 h-5 w-5 text-primary"/>نظرة عامة على المبيعات الشهرية</CardTitle>
+            <CardDescription>عرض بياني لإجمالي المبيعات خلال الأشهر الماضية.</CardDescription>
           </CardHeader>
-          <CardContent className="h-[300px]">
+          <CardContent className="h-[350px] p-4">
             {salesData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={salesData} layout="vertical">
+                <BarChart data={salesData} layout="vertical" margin={{ right: 20, left: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis type="number" stroke="hsl(var(--muted-foreground))" reversed={true} />
-                  <YAxis dataKey="name" type="category" stroke="hsl(var(--muted-foreground))" width={80} />
-                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }} cursor={{ fill: 'hsl(var(--accent))', fillOpacity: 0.1 }}/>
+                  <XAxis type="number" stroke="hsl(var(--muted-foreground))" reversed={false} axisLine={false} tickLine={false} />
+                  <YAxis dataKey="name" type="category" stroke="hsl(var(--muted-foreground))" width={80} axisLine={false} tickLine={false} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 'var(--radius)', color: 'hsl(var(--popover-foreground))' }} 
+                    cursor={{ fill: 'hsl(var(--accent))', fillOpacity: 0.1 }}
+                  />
                   <Bar dataKey="sales" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} barSize={20}/>
                 </BarChart>
               </ResponsiveContainer>
             ) : (
               <div className="flex items-center justify-center h-full">
-                <p className="text-muted-foreground">لا توجد بيانات مبيعات لعرضها.</p>
+                <p className="text-muted-foreground text-center p-4">لا توجد بيانات مبيعات لعرضها في الرسم البياني حاليًا. <br/> سيتم عرض البيانات بمجرد تسجيل عمليات بيع.</p>
               </div>
             )}
           </CardContent>
         </Card>
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle>توزيع المصروفات</CardTitle>
+            <CardTitle className="flex items-center"><PieChartIcon className="ml-2 h-5 w-5 text-primary"/>توزيع المصروفات</CardTitle>
+            <CardDescription>تحليل المصروفات حسب الفئات الرئيسية.</CardDescription>
           </CardHeader>
-          <CardContent className="h-[300px]">
+          <CardContent className="h-[350px] p-4">
             {expenseData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -105,12 +151,12 @@ export default function DashboardPage() {
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', color: 'hsl(var(--popover-foreground))' }}/>
+                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 'var(--radius)', color: 'hsl(var(--popover-foreground))' }}/>
                 </PieChart>
               </ResponsiveContainer>
             ) : (
                <div className="flex items-center justify-center h-full">
-                <p className="text-muted-foreground">لا توجد بيانات مصروفات لعرضها.</p>
+                <p className="text-muted-foreground text-center p-4">لا توجد بيانات مصروفات لعرضها في الرسم البياني حاليًا. <br/> سيتم عرض البيانات بمجرد تسجيل المصروفات.</p>
               </div>
             )}
           </CardContent>
@@ -120,33 +166,44 @@ export default function DashboardPage() {
       <div className="grid gap-6 md:grid-cols-2">
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="flex items-center"><Activity className="ml-2 h-5 w-5"/>النشاطات الأخيرة</CardTitle>
+            <CardTitle className="flex items-center"><Activity className="ml-2 h-5 w-5 text-primary"/>النشاطات الأخيرة</CardTitle>
+            <CardDescription>آخر التحديثات والإجراءات المسجلة في النظام.</CardDescription>
           </CardHeader>
           <CardContent>
             {recentActivities.length > 0 ? (
-              <ul className="space-y-3">
+              <ul className="space-y-4">
                 {recentActivities.map((activity, index) => (
-                  <li key={index} className="text-sm text-muted-foreground">{activity}</li>
+                  <li key={index} className="flex items-start gap-3 text-sm">
+                    <activity.icon className="h-4 w-4 mt-1 text-primary flex-shrink-0" />
+                    <div>
+                        <p className="text-foreground">{activity.text}</p>
+                        <p className="text-xs text-muted-foreground">{activity.time}</p>
+                    </div>
+                  </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-muted-foreground">لا توجد نشاطات حديثة لعرضها.</p>
+              <p className="text-muted-foreground text-center p-4">لا توجد نشاطات حديثة لعرضها. <br/> ستظهر هنا آخر الإجراءات التي تمت في النظام.</p>
             )}
           </CardContent>
         </Card>
          <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="flex items-center"><LinkIcon className="ml-2 h-5 w-5"/>روابط سريعة</CardTitle>
+            <CardTitle className="flex items-center"><LinkIcon className="ml-2 h-5 w-5 text-primary"/>روابط سريعة</CardTitle>
+            <CardDescription>اختصارات لأكثر الوظائف استخدامًا في النظام.</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col space-y-2">
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
              {quickLinks.length > 0 ? (
                 quickLinks.map((link, index) => (
-                    <Button key={index} variant="link" className="text-primary justify-start p-0 h-auto hover:underline">
-                        {link.label}
-                    </Button>
+                  <Button key={index} variant="outline" asChild className="justify-start text-base p-3 h-auto hover:bg-accent hover:text-accent-foreground">
+                    <Link href={link.href} className="flex items-center gap-2">
+                      <link.icon className="h-4 w-4" />
+                      {link.label}
+                    </Link>
+                  </Button>
                 ))
             ) : (
-              <p className="text-muted-foreground">لا توجد روابط سريعة حاليًا.</p>
+              <p className="text-muted-foreground text-center p-4 col-span-full">لا توجد روابط سريعة مضافة حاليًا.</p>
             )}
           </CardContent>
         </Card>

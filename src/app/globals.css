@@ -8,98 +8,98 @@ body {
 
 @layer base {
   :root {
-    --background: 319 100% 9%; /* Dark Aubergine (#2C001E) */
-    --foreground: 0 0% 97%; /* Light Grey (#F7F7F7) */
+    --background: 220 30% 96%; /* Very Light Cool Gray */
+    --foreground: 220 10% 20%; /* Dark Cool Gray */
 
-    --card: 319 27% 19%; /* Lighter Dark Aubergine (#3D2234) */
-    --card-foreground: 0 0% 97%;
+    --card: 0 0% 100%; /* White */
+    --card-foreground: 220 10% 25%;
 
-    --popover: 319 27% 15%; /* Slightly darker than card */
-    --popover-foreground: 0 0% 97%;
+    --popover: 0 0% 100%; /* White */
+    --popover-foreground: 220 10% 25%;
 
-    --primary: 16 82% 52%; /* Ubuntu Orange (#E95420) */
-    --primary-foreground: 0 0% 100%; /* White for contrast */
+    --primary: 205 85% 55%; /* Sky Blue */
+    --primary-foreground: 0 0% 100%; /* White */
 
-    --secondary: 317 39% 26%; /* Ubuntu Purple (#5E2750) */
-    --secondary-foreground: 0 0% 97%;
+    --secondary: 260 60% 75%; /* Soft Purple */
+    --secondary-foreground: 260 30% 25%; /* Darker Purple for text on secondary */
 
-    --muted: 319 100% 12%; /* Slightly lighter than background */
-    --muted-foreground: 34 7% 60%; /* Warm Grey for muted text */
+    --muted: 220 20% 90%; /* Light Gray */
+    --muted-foreground: 220 10% 45%; /* Medium Gray */
 
-    --accent: 300 60% 60%; /* Lighter, vibrant purple for accents */
-    --accent-foreground: 0 0% 100%;
+    --accent: 255 70% 65%; /* Slightly more vibrant Soft Purple */
+    --accent-foreground: 0 0% 100%; /* White */
 
-    --destructive: 0 70% 50%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 70% 50%; /* Red */
+    --destructive-foreground: 0 0% 98%; /* Light Gray for text on destructive */
 
-    --border: 319 27% 25%; /* Slightly lighter than card for borders */
-    --input: 319 27% 25%;
-    --ring: 16 82% 52%; /* Ubuntu Orange for rings */
+    --border: 220 20% 88%; /* Light Gray Border */
+    --input: 220 20% 88%; /* Light Gray Input Border */
+    --ring: 205 85% 55%; /* Sky Blue for rings */
 
-    --chart-1: 16 82% 60%; /* Orange family */
-    --chart-2: 300 60% 65%; /* Purple family */
-    --chart-3: 25 70% 60%; /* Lighter Orange */
-    --chart-4: 317 45% 40%; /* Deeper Purple */
-    --chart-5: 40 80% 55%; /* Yellowish Orange */
+    --chart-1: 205 85% 60%; /* Sky Blue family */
+    --chart-2: 260 60% 70%; /* Purple family */
+    --chart-3: 190 70% 60%; /* Lighter Blue/Cyan */
+    --chart-4: 270 45% 55%; /* Deeper Purple */
+    --chart-5: 215 80% 70%; /* Brighter Blue */
     
     --radius: 0.5rem;
 
     /* Sidebar specific colors */
-    --sidebar-background: 319 100% 7%; /* Even darker aubergine (#210017) */
-    --sidebar-foreground: 0 0% 90%;
-    --sidebar-primary: 16 82% 52%; /* Ubuntu Orange */
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 319 27% 15%; /* Hover color */
-    --sidebar-accent-foreground: 0 0% 97%;
-    --sidebar-border: 319 100% 5%;
-    --sidebar-ring: 16 82% 52%;
+    --sidebar-background: 220 15% 20%; /* Dark Cool Gray / Slate */
+    --sidebar-foreground: 220 20% 90%; /* Light Gray for sidebar text */
+    --sidebar-primary: 205 85% 60%; /* Sky Blue (slightly lighter for dark bg) */
+    --sidebar-primary-foreground: 0 0% 100%; /* White */
+    --sidebar-accent: 220 15% 30%; /* Hover/Active color - slightly lighter slate */
+    --sidebar-accent-foreground: 205 85% 70%; /* Lighter Sky Blue for text on hover */
+    --sidebar-border: 220 15% 15%; /* Darker border for sidebar elements */
+    --sidebar-ring: 205 85% 60%; /* Sky Blue for rings in sidebar */
   }
 
   .dark {
-    /* Keeping dark theme distinct for now, or could mirror :root if only one theme is desired */
-    --background: 220 13% 10%; 
-    --foreground: 220 10% 85%;
+    /* For now, dark theme will mirror the light theme's new colors. 
+       Can be customized further if a distinct dark theme is needed. */
+    --background: 220 15% 10%; /* Darker Slate */
+    --foreground: 220 20% 85%; /* Lighter Gray */
 
-    --card: 220 13% 12%;
-    --card-foreground: 220 10% 85%;
+    --card: 220 15% 15%; /* Dark Card Background */
+    --card-foreground: 220 20% 85%;
 
-    --popover: 220 13% 12%;
-    --popover-foreground: 220 10% 85%;
+    --popover: 220 15% 12%;
+    --popover-foreground: 220 20% 85%;
 
-    --primary: 16 82% 52%; /* Ubuntu Orange for dark theme too */
+    --primary: 205 85% 55%; 
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 317 39% 30%; /* Slightly lighter purple for dark theme */
-    --secondary-foreground: 0 0% 97%;
+    --secondary: 260 60% 70%; 
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 220 10% 20%;
-    --muted-foreground: 220 10% 55%;
+    --muted: 220 15% 25%;
+    --muted-foreground: 220 15% 55%;
 
-    --accent: 300 60% 65%; /* Lighter purple accent for dark theme */
+    --accent: 255 70% 65%; 
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 70% 50%;
+    --destructive: 0 60% 50%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 220 10% 25%;
-    --input: 220 10% 25%;
-    --ring: 16 82% 52%;
+    --border: 220 15% 25%;
+    --input: 220 15% 25%;
+    --ring: 205 85% 55%;
     
-    --chart-1: 16 82% 60%;
-    --chart-2: 300 60% 65%;
-    --chart-3: 25 70% 60%;
-    --chart-4: 317 45% 40%;
-    --chart-5: 40 80% 55%;
+    --chart-1: 205 85% 60%;
+    --chart-2: 260 60% 70%;
+    --chart-3: 190 70% 60%;
+    --chart-4: 270 45% 55%;
+    --chart-5: 215 80% 70%;
 
-    /* Dark Sidebar specific colors */
-    --sidebar-background: 319 100% 6%; /* Even darker for dark theme sidebar */
-    --sidebar-foreground: 0 0% 85%; 
-    --sidebar-primary: 16 82% 52%; 
+    --sidebar-background: 220 15% 8%; 
+    --sidebar-foreground: 220 20% 80%; 
+    --sidebar-primary: 205 85% 60%; 
     --sidebar-primary-foreground: 0 0% 100%; 
-    --sidebar-accent: 319 27% 12%; 
-    --sidebar-accent-foreground: 0 0% 95%; 
-    --sidebar-border: 319 100% 4%;
-    --sidebar-ring: 16 82% 52%;
+    --sidebar-accent: 220 15% 20%; 
+    --sidebar-accent-foreground: 205 85% 70%; 
+    --sidebar-border: 220 15% 12%;
+    --sidebar-ring: 205 85% 60%;
   }
 }
 
