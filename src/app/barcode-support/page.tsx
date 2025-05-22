@@ -1,3 +1,4 @@
+
 "use client";
 
 import { PageHeader } from "@/components/page-header";
@@ -5,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Barcode, Search, Package, DollarSign, Info, QrCodeScan } from "lucide-react";
+import { Barcode, Search, Package, DollarSign, Info, QrCode as QrCodeIcon } from "lucide-react"; // Changed QrCodeScan to QrCodeIcon
 import Image from "next/image";
 import React, { useState, useRef, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
@@ -18,16 +19,8 @@ interface ScannedItem {
   description: string;
   stock: string;
   category: string;
-  imageUrl?: string; 
+  imageUrl?: string;
 }
-
-// Mock database of items
-const mockItemDatabase: ScannedItem[] = [
-  { id: "123456789012", name: "قهوة فاخرة مختصة", price: "25.50", description: "حبوب بن أرابيكا محمصة بعناية، ذات نكهة غنية ومتوازنة.", stock: "متوفر (15 كيس)", category: "المشروبات", imageUrl: "https://placehold.co/600x400.png?text=قهوة+فاخرة" },
-  { id: "987654321098", name: "كوب سيراميك يدوي", price: "45.00", description: "كوب سيراميك مصنوع يدويًا بتصميم فريد وألوان جذابة.", stock: "متوفر (8 قطع)", category: "الأدوات المنزلية", imageUrl: "https://placehold.co/600x400.png?text=كوب+سيراميك" },
-  { id: "112233445566", name: "شاحن محمول سريع", price: "120.00", description: "شاحن محمول بسعة كبيرة يدعم الشحن السريع لجميع الأجهزة.", stock: "نفذ المخزون", category: "الإلكترونيات", imageUrl: "https://placehold.co/600x400.png?text=شاحن+محمول" },
-];
-
 
 export default function BarcodeSupportPage() {
   const [scannedItem, setScannedItem] = useState<ScannedItem | null>(null);
@@ -38,38 +31,14 @@ export default function BarcodeSupportPage() {
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
 
   useEffect(() => {
-    const getCameraPermission = async () => {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setHasCameraPermission(false);
-        // console.warn("getUserMedia not supported"); // Potentially inform user through UI if critical
-        return;
-      }
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-        setHasCameraPermission(true);
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      } catch (error) {
-        console.error('Error accessing camera:', error);
-        setHasCameraPermission(false);
-        toast({
-          variant: 'destructive',
-          title: 'خطأ في الوصول للكاميرا',
-          description: 'يرجى تمكين صلاحيات الكاميرا في متصفحك لاستخدام ميزة المسح الضوئي.',
-        });
-      }
-    };
-
-    // getCameraPermission(); // Enable this if you want to auto-start camera
-
-    return () => { // Cleanup function
+    // getCameraPermission is now called by startCameraScan
+    return () => {
       if (videoRef.current && videoRef.current.srcObject) {
         const stream = videoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [toast]);
+  }, []);
 
 
   const handleFetchDetails = () => {
@@ -79,9 +48,11 @@ export default function BarcodeSupportPage() {
       return;
     }
     setIsLoading(true);
-    // Simulate API call
+    // Simulate API call - In a real app, this would fetch from a backend
     setTimeout(() => {
-      const item = mockItemDatabase.find(i => i.id === barcodeInput.trim());
+      // const item = mockItemDatabase.find(i => i.id === barcodeInput.trim()); // mockItemDatabase is removed
+      // For now, we simulate not finding any item as there's no database
+      const item = null;
       if (item) {
         setScannedItem(item);
         toast({ title: "تم العثور على المنتج", description: `عرض تفاصيل المنتج: ${item.name}` });
@@ -92,46 +63,56 @@ export default function BarcodeSupportPage() {
       setIsLoading(false);
     }, 1000);
   };
-  
+
   const startCameraScan = async () => {
-    if (hasCameraPermission === false) {
-       toast({ variant: 'destructive', title: 'الكاميرا غير متاحة', description: 'لا يمكن بدء المسح. يرجى التأكد من صلاحيات الكاميرا.'});
+    if (hasCameraPermission === false) { // Already tried and failed
+       toast({ variant: 'destructive', title: 'الكاميرا غير متاحة', description: 'لا يمكن بدء المسح. يرجى التأكد من صلاحيات الكاميرا أو أنها غير مستخدمة من قبل تطبيق آخر.'});
        return;
     }
-     if (videoRef.current && videoRef.current.srcObject) { // Camera already active
-        // Potentially add logic here if you want to restart or re-focus
+
+    // If camera is already active, don't re-request unless necessary
+    if (videoRef.current && videoRef.current.srcObject && videoRef.current.readyState >= videoRef.current.HAVE_CURRENT_DATA) {
         toast({ title: "الكاميرا نشطة بالفعل", description: "يمكنك توجيهها نحو الباركود للمسح."});
+        videoRef.current.play().catch(e => console.error("Error playing video: ", e)); // Ensure it's playing
+        // TODO: Integrate actual barcode scanning library here
         return;
     }
-    
+
+    // Request camera permission if not yet determined or not active
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setHasCameraPermission(false);
+        toast({ variant: 'destructive', title: 'ميزة الكاميرا غير مدعومة', description: 'متصفحك لا يدعم الوصول إلى الكاميرا.' });
+        return;
+    }
+
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
         setHasCameraPermission(true);
         if (videoRef.current) {
             videoRef.current.srcObject = stream;
-            videoRef.current.play(); // Ensure video plays
+            videoRef.current.play().catch(e => console.error("Error playing video: ", e));
              // TODO: Integrate actual barcode scanning library here
-             // For now, we'll simulate a scan after a few seconds
+             // For now, we'll simulate a scan after a few seconds that will likely not find an item
             setTimeout(() => {
-                if (videoRef.current && videoRef.current.srcObject) { // Check if still active
-                    setBarcodeInput("123456789012"); // Simulate scanning first item
-                    handleFetchDetails(); // Fetch details for the simulated scan
-                    toast({ title: "تم المسح (محاكاة)", description: "تمت محاكاة مسح باركود."});
+                if (videoRef.current && videoRef.current.srcObject) {
+                    setBarcodeInput("000000000000"); // Simulate scanning a non-existent item
+                    handleFetchDetails();
+                    toast({ title: "تم المسح (محاكاة)", description: "تمت محاكاة مسح باركود. ابحث عن المنتج يدويًا إذا لم يظهر."});
                 }
             }, 3000);
         }
     } catch (error) {
         console.error('Error starting camera:', error);
         setHasCameraPermission(false);
-        toast({ variant: 'destructive', title: 'خطأ في تشغيل الكاميرا', description: 'لم نتمكن من تشغيل الكاميرا. يرجى التحقق من الصلاحيات.'});
+        toast({ variant: 'destructive', title: 'خطأ في تشغيل الكاميرا', description: 'لم نتمكن من تشغيل الكاميرا. يرجى التحقق من الصلاحيات والمحاولة مرة أخرى.'});
     }
   };
 
 
   return (
     <>
-      <PageHeader 
-        title="دعم العملاء بالباركود" 
+      <PageHeader
+        title="دعم العملاء بالباركود"
         description="امسح باركود المنتج أو أدخله يدويًا لعرض سعره وتفاصيله فورًا."
       />
 
@@ -148,34 +129,33 @@ export default function BarcodeSupportPage() {
             <div className="space-y-2">
               <Label htmlFor="product-barcode" className="text-base">باركود المنتج</Label>
               <div className="flex items-center gap-2 mt-1">
-                <Input 
-                  id="product-barcode" 
-                  placeholder="مثال: 123456789012" 
+                <Input
+                  id="product-barcode"
+                  placeholder="مثال: 123456789012"
                   value={barcodeInput}
                   onChange={(e) => setBarcodeInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleFetchDetails()}
                   className="text-lg py-2.5"
                   disabled={isLoading}
                 />
-                <Button onClick={startCameraScan} variant="outline" size="icon" title="مسح بالكاميرا" disabled={isLoading || hasCameraPermission === false}>
-                    <QrCodeScan className="h-5 w-5" />
+                <Button onClick={startCameraScan} variant="outline" size="icon" title="مسح بالكاميرا" disabled={isLoading}>
+                    <QrCodeIcon className="h-5 w-5" />
                 </Button>
               </div>
             </div>
-             {/* Video element for camera */}
             <div className="relative">
-                 <video ref={videoRef} className={`w-full aspect-video rounded-md bg-muted ${ !(hasCameraPermission && videoRef.current?.srcObject) && 'hidden' }`} autoPlay playsInline muted />
-                 { (hasCameraPermission === null && !videoRef.current?.srcObject) && (
+                 <video ref={videoRef} className={`w-full aspect-video rounded-md bg-muted ${ !(hasCameraPermission && videoRef.current?.srcObject) ? 'hidden' : '' }`} autoPlay playsInline muted />
+                 { (hasCameraPermission === null || (hasCameraPermission && !videoRef.current?.srcObject)) && (
                     <div className="w-full aspect-video rounded-md bg-muted flex flex-col items-center justify-center text-muted-foreground">
-                        <QrCodeScan className="h-10 w-10 mb-2"/>
+                        <QrCodeIcon className="h-10 w-10 mb-2"/>
                         <p>انقر على زر الكاميرا لبدء المسح</p>
                     </div>
                  )}
-                 {hasCameraPermission === false && (
+                 {hasCameraPermission === false && ( // Show this persistent message if permission was denied
                     <Alert variant="destructive" className="mt-2">
-                      <AlertTitle>الكاميرا غير متاحة</AlertTitle>
+                      <AlertTitle>الكاميرا غير متاحة أو غير مسموح بها</AlertTitle>
                       <AlertDescription>
-                        يرجى السماح بالوصول إلى الكاميرا في إعدادات المتصفح لاستخدام ميزة المسح الضوئي.
+                        يرجى السماح بالوصول إلى الكاميرا في إعدادات المتصفح وتحديث الصفحة، أو التأكد من أنها ليست قيد الاستخدام من قبل تطبيق آخر.
                       </AlertDescription>
                     </Alert>
                  )}
@@ -199,7 +179,7 @@ export default function BarcodeSupportPage() {
           </CardContent>
         </Card>
 
-        <Card className="w-full shadow-lg sticky top-20"> {/* Product details card */}
+        <Card className="w-full shadow-lg sticky top-20">
           <CardHeader>
             <CardTitle className="text-2xl flex items-center">
               <Package className="ml-2 h-6 w-6 text-primary" />
@@ -212,12 +192,12 @@ export default function BarcodeSupportPage() {
               <div className="space-y-4">
                 {scannedItem.imageUrl && (
                   <div className="w-full h-60 relative rounded-lg overflow-hidden shadow-md mb-4 bg-muted">
-                    <Image 
-                      src={scannedItem.imageUrl} 
-                      alt={scannedItem.name} 
-                      layout="fill" 
+                    <Image
+                      src={scannedItem.imageUrl}
+                      alt={scannedItem.name}
+                      layout="fill"
                       objectFit="cover"
-                      data-ai-hint={`${scannedItem.category} ${scannedItem.name.substring(0,15)}`} 
+                       data-ai-hint={`${scannedItem.category} product`}
                     />
                   </div>
                 )}
@@ -225,7 +205,7 @@ export default function BarcodeSupportPage() {
                 <p className="text-3xl font-bold text-primary flex items-center">
                   <DollarSign className="ml-2 h-7 w-7" /> {scannedItem.price} ر.س
                 </p>
-                
+
                 <div className="space-y-3 text-base">
                     <div className="flex items-center">
                         <Info className="ml-2 h-5 w-5 text-muted-foreground" />
@@ -265,3 +245,5 @@ export default function BarcodeSupportPage() {
     </>
   );
 }
+
+    

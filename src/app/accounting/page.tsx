@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PlusCircle, Edit, Trash2, Search, Filter } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Search, Filter, Landmark } from "lucide-react"; // Added Landmark for Cost Centers
 import React, { useState } from 'react';
 import { Input } from "@/components/ui/input";
 
@@ -23,14 +23,22 @@ interface Account {
   id: string;
   code: string;
   name: string;
-  type: "أصول" | "التزامات" | "حقوق ملكية" | "إيرادات" | "مصروفات"; // Account types in Arabic
+  type: "أصول" | "التزامات" | "حقوق ملكية" | "إيرادات" | "مصروفات"; 
   balance: number;
   parentAccount?: string;
+}
+
+interface CostCenter {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
 }
 
 export default function AccountingPage() {
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [chartOfAccountsData, setChartOfAccountsData] = useState<Account[]>([]);
+  const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
 
   // TODO: Implement fetching, adding, editing, deleting logic
 
@@ -38,7 +46,7 @@ export default function AccountingPage() {
     <>
       <PageHeader 
         title="نظام المحاسبة المتكامل" 
-        description="إدارة قيود اليومية اليومية، شجرة الحسابات، والتقارير المالية."
+        description="إدارة قيود اليومية اليومية، شجرة الحسابات، مراكز التكلفة، والتقارير المالية."
         actions={
           <Button>
             <PlusCircle className="ml-2 h-4 w-4" /> إضافة قيد يومية جديد
@@ -47,9 +55,10 @@ export default function AccountingPage() {
       />
 
       <Tabs defaultValue="journal" dir="rtl" className="mt-6">
-        <TabsList className="grid w-full grid-cols-2 md:w-[400px] mb-4">
+        <TabsList className="grid w-full grid-cols-3 md:w-[500px] mb-4">
           <TabsTrigger value="journal" className="text-base py-2.5">قيود اليومية</TabsTrigger>
           <TabsTrigger value="accounts" className="text-base py-2.5">شجرة الحسابات</TabsTrigger>
+          <TabsTrigger value="costCenters" className="text-base py-2.5 flex items-center gap-1"><Landmark className="h-4 w-4"/>مراكز التكلفة</TabsTrigger>
         </TabsList>
 
         <TabsContent value="journal">
@@ -161,7 +170,59 @@ export default function AccountingPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="costCenters">
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle>مراكز التكلفة</CardTitle>
+              <CardDescription>إدارة وتتبع مراكز التكلفة في المنشأة.</CardDescription>
+               <div className="flex items-center gap-2 pt-4">
+                <Input placeholder="ابحث في مراكز التكلفة..." className="max-w-sm" />
+                <Button variant="outline" > <PlusCircle className="ml-2 h-4 w-4" /> إضافة مركز تكلفة جديد</Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {costCenters.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>رمز مركز التكلفة</TableHead>
+                      <TableHead>اسم مركز التكلفة</TableHead>
+                      <TableHead>الوصف</TableHead>
+                      <TableHead className="text-center">الإجراءات</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {costCenters.map((center) => (
+                      <TableRow key={center.id}>
+                        <TableCell>{center.code}</TableCell>
+                        <TableCell className="font-medium">{center.name}</TableCell>
+                        <TableCell>{center.description || "-"}</TableCell>
+                        <TableCell className="text-center">
+                          <Button variant="ghost" size="icon" title="تعديل مركز التكلفة">
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                           <Button variant="ghost" size="icon" title="حذف مركز التكلفة" className="text-destructive hover:text-destructive">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="text-center text-muted-foreground py-10">
+                  <Landmark className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                  <p className="text-lg">لا توجد مراكز تكلفة لعرضها حاليًا.</p>
+                  <p className="text-sm">ابدأ بإضافة مراكز تكلفة جديدة لتنظيم تتبع النفقات.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
     </>
   );
 }
+
+    

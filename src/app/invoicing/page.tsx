@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, Eye, Edit, Trash2, Search, Filter, FileText, ShoppingBag, Truck, RotateCcw } from "lucide-react";
+import { PlusCircle, Eye, Edit, Trash2, Search, Filter, FileText, ShoppingBag, Truck, RotateCcw, CreditCard, UserCheck, FileSignature } from "lucide-react"; // Added more icons
 import React, { useState } from 'react';
 import { Input } from "@/components/ui/input";
 
@@ -23,6 +23,9 @@ interface Invoice {
   amount: number;
   status: InvoiceStatus;
   type: InvoiceType; 
+  paymentMethod?: string; // طريقة الدفع
+  notes?: string; // ملاحظات
+  salesperson?: string; // مندوب المبيعات
 }
 
 const statusMap: Record<InvoiceStatus, InvoiceStatusArabic> = {
@@ -36,12 +39,12 @@ const statusMap: Record<InvoiceStatus, InvoiceStatusArabic> = {
 
 const getStatusVariant = (status: InvoiceStatus): "default" | "secondary" | "destructive" | "outline" => {
   switch (status) {
-    case "Paid": return "default"; // Often green or primary
-    case "Pending": return "secondary"; // Often yellow or neutral
-    case "Overdue": return "destructive"; // Red
-    case "Draft": return "outline"; // Neutral
-    case "Cancelled": return "outline"; // Neutral with greyish tone
-    case "PartiallyPaid": return "secondary"; // Similar to pending, or distinct
+    case "Paid": return "default"; 
+    case "Pending": return "secondary"; 
+    case "Overdue": return "destructive"; 
+    case "Draft": return "outline"; 
+    case "Cancelled": return "outline"; 
+    case "PartiallyPaid": return "secondary"; 
     default: return "outline";
   }
 };
@@ -82,9 +85,10 @@ const InvoiceTable = ({ invoices, typeLabel, onEdit, onDelete, onView }: {
             <TableRow>
               <TableHead>رقم الفاتورة</TableHead>
               <TableHead>التاريخ</TableHead>
-              <TableHead>تاريخ الاستحقاق</TableHead>
               <TableHead>العميل/المورد</TableHead>
+              <TableHead>المندوب</TableHead>
               <TableHead className="text-left">المبلغ (ر.س)</TableHead>
+              <TableHead>طريقة الدفع</TableHead>
               <TableHead className="text-center">الحالة</TableHead>
               <TableHead className="text-center">الإجراءات</TableHead>
             </TableRow>
@@ -94,9 +98,10 @@ const InvoiceTable = ({ invoices, typeLabel, onEdit, onDelete, onView }: {
               <TableRow key={invoice.id}>
                 <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">{invoice.date}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{invoice.dueDate || "-"}</TableCell>
                 <TableCell>{invoice.customerSupplierName}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{invoice.salesperson || "-"}</TableCell>
                 <TableCell className="text-left font-semibold">{invoice.amount.toFixed(2)}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{invoice.paymentMethod || "-"}</TableCell>
                 <TableCell className="text-center">
                   <Badge variant={getStatusVariant(invoice.status)} className={`text-xs ${getStatusColorClass(invoice.status)}`}>{statusMap[invoice.status]}</Badge>
                 </TableCell>
@@ -123,14 +128,13 @@ const InvoiceTable = ({ invoices, typeLabel, onEdit, onDelete, onView }: {
 export default function InvoicingPage() {
   const [allInvoices, setAllInvoices] = useState<Invoice[]>([]);
   
-  // TODO: Implement actual data fetching and CRUD operations
   const handleEditInvoice = (invoice: Invoice) => console.log("Edit invoice:", invoice.id);
   const handleDeleteInvoice = (invoice: Invoice) => console.log("Delete invoice:", invoice.id);
   const handleViewInvoice = (invoice: Invoice) => console.log("View invoice:", invoice.id);
 
   const salesInvoices = allInvoices.filter(inv => inv.type === "Sales");
   const purchaseInvoices = allInvoices.filter(inv => inv.type === "Purchase");
-  const taxInvoices = allInvoices.filter(inv => inv.type === "Tax"); // This might be part of Sales/Purchase or separate
+  const taxInvoices = allInvoices.filter(inv => inv.type === "Tax"); 
   const returnInvoices = allInvoices.filter(inv => inv.type === "Return");
 
 
@@ -150,7 +154,7 @@ export default function InvoicingPage() {
         <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 mb-4">
           <TabsTrigger value="sales" className="text-base py-2.5 flex items-center gap-2"><FileText className="h-4 w-4"/>فواتير المبيعات</TabsTrigger>
           <TabsTrigger value="purchase" className="text-base py-2.5 flex items-center gap-2"><ShoppingBag className="h-4 w-4"/>فواتير المشتريات</TabsTrigger>
-          <TabsTrigger value="tax" className="text-base py-2.5 flex items-center gap-2"><Truck className="h-4 w-4"/>فواتير ضريبية</TabsTrigger> {/* Icon changed for clarity */}
+          <TabsTrigger value="tax" className="text-base py-2.5 flex items-center gap-2"><FileSignature className="h-4 w-4"/>فواتير ضريبية</TabsTrigger> 
           <TabsTrigger value="returns" className="text-base py-2.5 flex items-center gap-2"><RotateCcw className="h-4 w-4"/>فواتير المرتجعات</TabsTrigger>
         </TabsList>
         <TabsContent value="sales">
@@ -169,3 +173,5 @@ export default function InvoicingPage() {
     </>
   );
 }
+
+    

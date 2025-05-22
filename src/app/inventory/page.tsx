@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { PlusCircle, PackageSearch, AlertOctagon, Edit, History, FileWarning, Package, Search, Filter, ListChecks, Repeat, BellDot } from "lucide-react";
+import { PlusCircle, PackageSearch, AlertOctagon, Edit, History, FileWarning, Package, Search, Filter, ListChecks, Repeat, BellDot, Barcode, DollarSign, CalendarDays } from "lucide-react"; // Added Barcode, DollarSign, CalendarDays
 import { Badge } from "@/components/ui/badge";
 import React, { useState } from 'react';
 import { Input } from "@/components/ui/input";
@@ -18,10 +18,15 @@ interface InventoryItem {
   id: string;
   name: string;
   sku: string;
+  barcode?: string; // الباركود
   category: string;
   quantity: number;
-  reorderPoint: number; // Point at which to reorder
+  reorderPoint: number; 
+  costPrice: number; // سعر التكلفة
+  sellingPrice: number; // سعر البيع
   supplier?: string;
+  warehouse?: string; // المستودع
+  expiryDate?: string; // تاريخ الصلاحية
   lastCountDate: string;
   imageUrl?: string;
 }
@@ -31,16 +36,16 @@ interface StockMovement {
   date: string;
   itemSku: string;
   itemName: string;
-  type: "استلام" | "صرف" | "تعديل جرد" | "مرتجع"; // Movement types in Arabic
-  quantityChanged: number; // Positive for increase, negative for decrease
+  type: "استلام" | "صرف" | "تعديل جرد" | "مرتجع"; 
+  quantityChanged: number; 
   newQuantity: number;
-  reference?: string; // e.g., Invoice ID, PO Number
+  reference?: string; 
   user?: string;
 }
 
 interface InventoryAlert {
   id: string;
-  type: "مخزون منخفض" | "منتج على وشك النفاذ" | "انتهاء صلاحية قريب" | "خطأ في الجرد"; // Alert types in Arabic
+  type: "مخزون منخفض" | "منتج على وشك النفاذ" | "انتهاء صلاحية قريب" | "خطأ في الجرد"; 
   message: string;
   severity: "warning" | "destructive" | "info";
   date: string;
@@ -55,9 +60,9 @@ const getItemStatus = (item: InventoryItem): InventoryItemStatus => {
 }
 
 const getStatusBadgeVariant = (status: InventoryItemStatus) => {
-  if (status === "مخزون منخفض") return "destructive"; // More prominent for low stock
+  if (status === "مخزون منخفض") return "destructive"; 
   if (status === "نفذ المخزون") return "destructive";
-  return "default"; // "default" often maps to primary, or use "outline" for less emphasis
+  return "default"; 
 }
 
 
@@ -66,7 +71,6 @@ export default function InventoryPage() {
   const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
   const [inventoryAlerts, setInventoryAlerts] = useState<InventoryAlert[]>([]);
 
-  // TODO: Implement actual data fetching and CRUD operations
 
   return (
     <>
@@ -99,8 +103,8 @@ export default function InventoryPage() {
               <CardTitle>نظرة عامة على مستويات المخزون</CardTitle>
               <CardDescription>عرض ملخص لحالة جميع المنتجات في المخزون.</CardDescription>
               <div className="flex items-center gap-2 pt-4">
-                <Input placeholder="ابحث بالاسم أو SKU..." className="max-w-sm" />
-                <Button variant="outline"><Filter className="ml-2 h-4 w-4" /> تصفية حسب الفئة</Button>
+                <Input placeholder="ابحث بالاسم، SKU، أو الباركود..." className="max-w-sm" />
+                <Button variant="outline"><Filter className="ml-2 h-4 w-4" /> تصفية</Button>
               </div>
             </CardHeader>
             <CardContent>
@@ -109,18 +113,23 @@ export default function InventoryPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>المنتج (SKU)</TableHead>
+                      <TableHead>الباركود</TableHead>
                       <TableHead>الفئة</TableHead>
-                      <TableHead className="text-center">الكمية الحالية</TableHead>
-                      <TableHead className="text-center">نقطة إعادة الطلب</TableHead>
+                      <TableHead>المستودع</TableHead>
+                      <TableHead className="text-center">الكمية</TableHead>
+                      <TableHead className="text-center">إعادة الطلب</TableHead>
+                      <TableHead className="text-left">سعر التكلفة</TableHead>
+                      <TableHead className="text-left">سعر البيع</TableHead>
+                      <TableHead>تاريخ الصلاحية</TableHead>
                       <TableHead className="text-center">الحالة</TableHead>
-                      <TableHead>آخر تحديث للجرد</TableHead>
+                      <TableHead>آخر جرد</TableHead>
                       <TableHead className="text-center">الإجراءات</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {inventoryItems.map((item) => {
                       const status = getItemStatus(item);
-                      const progressValue = item.reorderPoint > 0 ? (item.quantity / (item.reorderPoint * 2)) * 100 : item.quantity > 0 ? 100 : 0; // Example progress logic
+                      const progressValue = item.reorderPoint > 0 ? (item.quantity / (item.reorderPoint * 2)) * 100 : item.quantity > 0 ? 100 : 0;
 
                       return (
                         <TableRow key={item.id}>
@@ -134,12 +143,17 @@ export default function InventoryPage() {
                                </div>
                             </div>
                           </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{item.barcode || "-"}</TableCell>
                           <TableCell>{item.category}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{item.warehouse || "-"}</TableCell>
                           <TableCell className="text-center">
                             {item.quantity}
                             <Progress value={Math.min(100, progressValue)} className={`h-1.5 mt-1 ${status === 'مخزون منخفض' ? 'bg-red-100 [&>div]:bg-red-500' : status === 'نفذ المخزون' ? 'bg-destructive/20 [&>div]:bg-destructive' : 'bg-green-100 [&>div]:bg-green-500'}`} />
                           </TableCell>
                           <TableCell className="text-center">{item.reorderPoint}</TableCell>
+                          <TableCell className="text-left text-sm">{item.costPrice.toFixed(2)} ر.س</TableCell>
+                          <TableCell className="text-left text-sm">{item.sellingPrice.toFixed(2)} ر.س</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{item.expiryDate || "-"}</TableCell>
                           <TableCell className="text-center">
                             <Badge variant={getStatusBadgeVariant(status)} className="text-xs">{status}</Badge>
                           </TableCell>
@@ -258,7 +272,6 @@ export default function InventoryPage() {
                      </div>
                 </CardHeader>
                 <CardContent>
-                    {/* Placeholder for stock counts table or list */}
                     <div className="text-center text-muted-foreground py-10">
                         <ListChecks className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                         <p className="text-lg">لا توجد عمليات جرد مسجلة حاليًا.</p>
@@ -271,3 +284,5 @@ export default function InventoryPage() {
     </>
   );
 }
+
+    

@@ -27,20 +27,11 @@ interface InvoiceItem extends Item {
   quantity: number;
 }
 
-// Mock data for available items
-const mockAvailableItems: Item[] = [
-  { id: "item001", name: "تيشيرت قطني فاخر", price: 75.00, category: "ملابس", stock: 50, barcode: "628110123456", imageUrl: "https://placehold.co/300x300.png?text=تيشيرت" },
-  { id: "item002", name: "بنطلون جينز عصري", price: 120.50, category: "ملابس", stock: 30, barcode: "628110789012", imageUrl: "https://placehold.co/300x300.png?text=بنطلون+جينز" },
-  { id: "item003", name: "سماعات لاسلكية بلوتوث", price: 250.00, category: "إلكترونيات", stock: 20, barcode: "628110345678", imageUrl: "https://placehold.co/300x300.png?text=سماعات" },
-  { id: "item004", name: "كتاب تطوير الذات", price: 45.00, category: "كتب", stock: 100, barcode: "978603507281", imageUrl: "https://placehold.co/300x300.png?text=كتاب" },
-  { id: "item005", name: "قهوة مختصة (250 جرام)", price: 60.00, category: "بقالة", stock: 0, barcode: "628110901234", imageUrl: "https://placehold.co/300x300.png?text=قهوة" },
-];
-
 export default function FastInvoicePage() {
   const [barcodeInputValue, setBarcodeInputValue] = useState<string>("");
   const [scannedItem, setScannedItem] = useState<Item | null>(null);
   const [currentInvoiceItems, setCurrentInvoiceItems] = useState<InvoiceItem[]>([]);
-  const [availableItems, setAvailableItems] = useState<Item[]>(mockAvailableItems); 
+  const [availableItems, setAvailableItems] = useState<Item[]>([]); 
   const [activeCategory, setActiveCategory] = useState<string>("الكل");
   const { toast } = useToast();
 
@@ -51,19 +42,20 @@ export default function FastInvoicePage() {
       toast({ title: "إدخال فارغ", description: "الرجاء إدخال أو مسح باركود المنتج.", variant: "destructive" });
       return;
     }
+    // In a real app, this would fetch from a backend or a more robust data source.
+    // For now, it will always result in "not found" as availableItems is empty.
     const foundItem = availableItems.find(item => item.barcode === barcodeInputValue.trim());
     if (foundItem) {
       setScannedItem(foundItem);
       toast({ title: "تم العثور على المنتج", description: `المنتج: ${foundItem.name}` });
     } else {
       setScannedItem(null);
-      toast({ title: "منتج غير موجود", description: "لم يتم العثور على منتج بهذا الباركود.", variant: "destructive" });
+      toast({ title: "منتج غير موجود", description: "لم يتم العثور على منتج بهذا الباركود في قائمة المنتجات المتاحة حاليًا.", variant: "destructive" });
     }
   }, [barcodeInputValue, availableItems, toast]);
 
   useEffect(() => {
-    // Automatically trigger search if barcode input changes and has a reasonable length (e.g. EAN-13)
-    if (barcodeInputValue.trim().length >= 8) { // Common barcode lengths
+    if (barcodeInputValue.trim().length >= 8) { 
       handleScanOrEnter();
     }
   }, [barcodeInputValue, handleScanOrEnter]);
@@ -99,18 +91,18 @@ export default function FastInvoicePage() {
     setCurrentInvoiceItems(prevItems =>
       prevItems.map(item => {
         if (item.id === itemId) {
-          const targetItem = availableItems.find(i => i.id === itemId);
+          const targetItem = availableItems.find(i => i.id === itemId); // Check against currently available items
           if (targetItem && newQuantity > 0 && newQuantity <= targetItem.stock) {
             return { ...item, quantity: newQuantity };
           } else if (targetItem && newQuantity > targetItem.stock) {
              toast({ title: "كمية غير كافية", description: `الكمية المتوفرة من "${item.name}" هي ${targetItem.stock} فقط.`, variant: "destructive"});
-             return { ...item, quantity: targetItem.stock }; // Set to max available
+             return { ...item, quantity: targetItem.stock }; 
           } else if (newQuantity <= 0) {
-            return null; // Mark for removal
+            return null; 
           }
         }
         return item;
-      }).filter(item => item !== null) as InvoiceItem[] // Remove items marked for removal
+      }).filter(item => item !== null) as InvoiceItem[] 
     );
   };
 
@@ -132,7 +124,6 @@ export default function FastInvoicePage() {
       />
 
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* Left Panel: Barcode Scan & Quick Add */}
         <div className="lg:col-span-2 space-y-6">
             <Card className="shadow-lg">
               <CardHeader>
@@ -174,10 +165,10 @@ export default function FastInvoicePage() {
                     <div className="text-center py-6 text-muted-foreground border border-dashed rounded-md">
                       <PackageSearch className="mx-auto h-10 w-10 text-gray-400 mb-2" />
                       <p>سيتم عرض تفاصيل المنتج الممسوح هنا.</p>
+                      <p className="text-xs">تأكد من أن المنتج مضاف إلى المخزون وأن الباركود صحيح.</p>
                     </div>
                   )}
                 </div>
-                {/* Quick Add Items */}
                 <div className="space-y-3">
                     <h3 className="text-lg font-semibold flex items-center"><GripVertical className="ml-2 h-5 w-5 text-primary" />إضافة سريعة للعناصر</h3>
                      <div className="flex flex-wrap gap-2 pb-2 border-b">
@@ -191,6 +182,9 @@ export default function FastInvoicePage() {
                                 {category}
                             </Button>
                         ))}
+                         {availableItems.length > 0 && categories.length <= 1 && (
+                            <p className="text-xs text-muted-foreground">لا توجد فئات متعددة حاليًا.</p>
+                        )}
                     </div>
                     <ScrollArea className="h-[250px] pr-3">
                       {filteredQuickAddItems.length > 0 ? (
@@ -220,7 +214,9 @@ export default function FastInvoicePage() {
                           ))}
                         </div>
                       ) : (
-                        <p className="text-muted-foreground text-center py-8">لا توجد عناصر في هذه الفئة.</p>
+                        <p className="text-muted-foreground text-center py-8">
+                            {availableItems.length === 0 ? "لا توجد عناصر متاحة للإضافة السريعة حاليًا. يرجى إضافة منتجات إلى المخزون أولاً." : "لا توجد عناصر في هذه الفئة."}
+                        </p>
                       )}
                     </ScrollArea>
                 </div>
@@ -229,7 +225,6 @@ export default function FastInvoicePage() {
             </Card>
         </div>
 
-        {/* Right Panel: Current Invoice */}
         <Card className="lg:col-span-1 shadow-lg sticky top-20">
           <CardHeader>
             <CardTitle className="flex items-center text-xl">
@@ -238,7 +233,7 @@ export default function FastInvoicePage() {
             <CardDescription>إجمالي ({currentInvoiceItems.length}) عناصر</CardDescription>
           </CardHeader>
           <CardContent className="pb-0">
-            <ScrollArea className="h-[calc(100vh-380px)] min-h-[250px] pr-3"> {/* Adjusted height */}
+            <ScrollArea className="h-[calc(100vh-380px)] min-h-[250px] pr-3"> 
             <div className="space-y-3">
               {currentInvoiceItems.map(item => (
                 <div key={item.id} className="flex items-center p-3 border rounded-md shadow-sm bg-background hover:bg-muted/50">
@@ -284,7 +279,7 @@ export default function FastInvoicePage() {
                 <span>{currentTotal.toFixed(2)} ر.س</span>
             </div>
              <div className="flex justify-between text-muted-foreground text-sm">
-                <span>الضريبة (15%):</span> {/* Placeholder for tax logic */}
+                <span>الضريبة (15%):</span> 
                 <span>{(currentTotal * 0.15).toFixed(2)} ر.س</span>
             </div>
              <Separator />
@@ -301,3 +296,5 @@ export default function FastInvoicePage() {
     </>
   );
 }
+
+    

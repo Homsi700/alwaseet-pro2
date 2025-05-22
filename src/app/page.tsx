@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { DollarSign, Users, Package, AlertTriangle, TrendingUp, TrendingDown, Activity, Link as LinkIcon, BarChart2, PieChart as PieChartIcon, FileText } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Button } from "@/components/ui/button";
-import Link from "next/link"; // Import Link for navigation
+import Link from "next/link"; 
 import React from 'react';
 
 interface KpiCardProps {
@@ -45,11 +45,10 @@ const KpiCard: React.FC<KpiCardProps> = ({ title, value, icon: Icon, trend, chan
 
 
 export default function DashboardPage() {
-  // In a real app, this data would come from API calls and be stored in state
   const kpiData: KpiCardProps[] = [
-    { title: "إجمالي الإيرادات", value: "0 ر.س", icon: DollarSign, description: "الشهر الحالي", trend: "neutral", change: "+0% عن الشهر الماضي" },
-    { title: "المصروفات", value: "0 ر.س", icon: TrendingDown, description: "الشهر الحالي", trend: "neutral", change: "+0% عن الشهر الماضي" },
-    { title: "صافي الربح", value: "0 ر.س", icon: DollarSign, description: "الشهر الحالي", trend: "neutral", change: "+0% عن الشهر الماضي" },
+    { title: "إجمالي الإيرادات", value: "0 ر.س", icon: DollarSign, description: "الشهر الحالي", trend: "neutral", change: "0%" },
+    { title: "المصروفات", value: "0 ر.س", icon: TrendingDown, description: "الشهر الحالي", trend: "neutral", change: "0%" },
+    { title: "صافي الربح", value: "0 ر.س", icon: DollarSign, description: "الشهر الحالي", trend: "neutral", change: "0%" },
     { title: "عدد العملاء", value: "0", icon: Users, description: "إجمالي العملاء النشطين" },
     { title: "الفواتير المستحقة", value: "0 ر.س", icon: FileText, description: "مبالغ لم يتم تحصيلها" },
     { title: "قيمة المخزون", value: "0 ر.س", icon: Package, description: "التكلفة الإجمالية للمخزون" },
@@ -57,28 +56,15 @@ export default function DashboardPage() {
     { title: "متوسط قيمة الفاتورة", value: "0 ر.س", icon: BarChart2, description: "متوسط قيمة كل عملية بيع" },
   ];
   
-  // Placeholder data for charts, replace with actual data fetching
-  const salesData: { name: string; sales: number }[] = [
-    // { name: 'يناير', sales: 0 }, { name: 'فبراير', sales: 0 }, { name: 'مارس', sales: 0 }, 
-    // { name: 'ابريل', sales: 0 }, { name: 'مايو', sales: 0 }, { name: 'يونيو', sales: 0 }
-  ];
-  const expenseData: { name: string; value: number; color: string }[] = [
-    // { name: 'إيجار', value: 0, color: 'hsl(var(--chart-1))' },
-    // { name: 'تسويق', value: 0, color: 'hsl(var(--chart-2))' },
-    // { name: 'رواتب', value: 0, color: 'hsl(var(--chart-3))' },
-    // { name: 'مستلزمات', value: 0, color: 'hsl(var(--chart-4))' },
-  ];
+  const salesData: { name: string; sales: number }[] = [];
+  const expenseData: { name: string; value: number; color: string }[] = [];
   
-  const recentActivities: {text: string; time: string; icon: React.ElementType}[] = [
-    // { text: "تم إنشاء فاتورة جديدة #INV001", time: "منذ 5 دقائق", icon: FileText },
-    // { text: "تم إضافة عميل جديد: شركة الأمل", time: "منذ ساعة", icon: Users },
-    // { text: "تنبيه: مخزون منتج 'سكر' منخفض", time: "منذ 3 ساعات", icon: AlertTriangle },
-  ];
+  const recentActivities: {text: string; time: string; icon: React.ElementType}[] = [];
   
   const quickLinks: { label: string; href: string; icon: React.ElementType }[] = [
     { label: "إنشاء فاتورة جديدة", href: "/invoicing", icon: FileText },
     { label: "إضافة عميل جديد", href: "/contacts", icon: Users },
-    { label: "عرض تقرير المبيعات", href: "#", icon: BarChart2 }, // Replace # with actual report link
+    { label: "عرض تقرير المبيعات", href: "#", icon: BarChart2 }, 
     { label: "إدارة المخزون", href: "/inventory", icon: Package },
   ];
 
@@ -93,10 +79,10 @@ export default function DashboardPage() {
         ))}
       </div>
       
-      {kpiData.length === 0 && (
+       {(kpiData.length === 0 && salesData.length === 0 && expenseData.length === 0) && (
          <Card className="mb-6 shadow-lg">
            <CardContent className="pt-6">
-             <p className="text-center text-muted-foreground py-8">لا توجد مؤشرات أداء رئيسية لعرضها حالياً. قم بإعداد النظام لعرض البيانات.</p>
+             <p className="text-center text-muted-foreground py-8">لا توجد بيانات لعرضها في لوحة التحكم حالياً. ابدأ بإدخال البيانات في الأقسام المختلفة.</p>
            </CardContent>
          </Card>
        )}
@@ -211,3 +197,5 @@ export default function DashboardPage() {
     </>
   );
 }
+
+    

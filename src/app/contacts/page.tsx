@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { PlusCircle, Edit, Trash2, Mail, Phone, Landmark, Search, Filter, Users, Briefcase } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Mail, Phone, Landmark, Search, Filter, Users, Briefcase, Tag, CreditCard as CreditCardIcon, FileText as FileTextIcon } from "lucide-react"; // Added icons
 import { Badge } from "@/components/ui/badge";
 import React, { useState } from 'react';
 import { Input } from "@/components/ui/input";
@@ -19,10 +19,14 @@ interface Contact {
   email: string;
   phone: string;
   type: "Customer" | "Supplier"; 
-  balance: number; // Positive for customer credit/supplier payable, negative for customer debit/supplier receivable
+  balance: number; 
   lastActivity: string;
   companyName?: string;
   address?: string;
+  taxNumber?: string; // الرقم الضريبي
+  contactGroup?: string; // مجموعة جهة الاتصال
+  creditLimit?: number; // حد الائتمان (للعملاء)
+  paymentTerms?: string; // شروط الدفع
 }
 
 const ContactTable = ({ contacts, type, onEdit, onDelete, onViewTransactions }: { 
@@ -48,8 +52,10 @@ const ContactTable = ({ contacts, type, onEdit, onDelete, onViewTransactions }: 
             <TableRow>
               <TableHead>الاسم</TableHead>
               <TableHead>الشركة</TableHead>
-              <TableHead>البريد الإلكتروني</TableHead>
-              <TableHead>الهاتف</TableHead>
+              <TableHead>البريد/الهاتف</TableHead>
+              <TableHead>الرقم الضريبي</TableHead>
+              <TableHead>المجموعة</TableHead>
+              {type === "Customer" && <TableHead className="text-left">حد الائتمان (ر.س)</TableHead>}
               <TableHead className="text-left">الرصيد (ر.س)</TableHead>
               <TableHead>آخر نشاط</TableHead>
               <TableHead className="text-center">الإجراءات</TableHead>
@@ -69,15 +75,20 @@ const ContactTable = ({ contacts, type, onEdit, onDelete, onViewTransactions }: 
                 </TableCell>
                 <TableCell className="text-muted-foreground">{contact.companyName || "-"}</TableCell>
                 <TableCell>
-                  <a href={`mailto:${contact.email}`} className="text-primary hover:underline flex items-center gap-1 text-sm">
-                    <Mail className="h-3.5 w-3.5"/> {contact.email}
+                  <a href={`mailto:${contact.email}`} className="text-primary hover:underline flex items-center gap-1 text-xs">
+                    <Mail className="h-3 w-3"/> {contact.email}
                   </a>
-                </TableCell>
-                <TableCell>
-                   <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                      <Phone className="h-3.5 w-3.5"/> {contact.phone}
+                   <span className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                      <Phone className="h-3 w-3"/> {contact.phone}
                    </span>
                 </TableCell>
+                <TableCell className="text-sm text-muted-foreground">{contact.taxNumber || "-"}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{contact.contactGroup || "-"}</TableCell>
+                {type === "Customer" && (
+                  <TableCell className="text-left text-sm">
+                    {contact.creditLimit !== undefined ? `${contact.creditLimit.toFixed(2)}` : "-"}
+                  </TableCell>
+                )}
                 <TableCell className={`text-left font-semibold ${contact.balance < 0 ? 'text-red-600' : contact.balance > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
                   {Math.abs(contact.balance).toFixed(2)}
                   {contact.balance < 0 && <Badge variant="destructive" className="mr-1 text-xs">مستحق عليك</Badge>}
@@ -110,7 +121,6 @@ const ContactTable = ({ contacts, type, onEdit, onDelete, onViewTransactions }: 
 export default function ContactsPage() {
   const [contactsData, setContactsData] = useState<Contact[]>([]);
   
-  // TODO: Implement actual data fetching and CRUD operations
   const handleEditContact = (contact: Contact) => console.log("Edit contact:", contact.id);
   const handleDeleteContact = (contact: Contact) => console.log("Delete contact:", contact.id);
   const handleViewTransactions = (contact: Contact) => console.log("View transactions for:", contact.id);
@@ -158,3 +168,5 @@ export default function ContactsPage() {
     </>
   );
 }
+
+    
