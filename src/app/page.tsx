@@ -12,6 +12,7 @@ import { getInvoices } from "@/lib/services/invoicing";
 import { getInventoryItems } from "@/lib/services/inventory";
 import { getContacts } from "@/lib/services/contacts";
 import { getJournalEntries } from "@/lib/services/accounting"; 
+import { Badge } from "@/components/ui/badge"; // Added Badge import
 
 interface KpiCardProps {
   title: string;
@@ -220,3 +221,4 @@ export default function DashboardPage() {
     </>
   );
 }
+
