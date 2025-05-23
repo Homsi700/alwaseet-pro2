@@ -3,7 +3,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Input } from "@/components/ui/input";
-// import { Button } from "@/components/ui/button"; // Not used
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Barcode, DollarSign, Package, Search, Briefcase } from "lucide-react";
 import Image from "next/image";
@@ -23,7 +22,8 @@ export default function KioskPriceCheckerPage() {
   const handleFetchItemDetails = useCallback(async (barcodeToSearch: string) => {
     if (!barcodeToSearch.trim()) {
       setItemDetails(null);
-      setDisplayMessage("الرجاء إدخال أو مسح باركود المنتج.");
+      // Keep "جاهز لاستقبال باركود المنتج." as the default message if input is cleared manually
+      // setDisplayMessage("الرجاء إدخال أو مسح باركود المنتج.");
       return;
     }
     setIsLoading(true);
@@ -35,68 +35,79 @@ export default function KioskPriceCheckerPage() {
         setItemDetails(item);
         setDisplayMessage(""); // Clear message on success
       } else {
-        // toast({ title: "منتج غير موجود", description: "الباركود المدخل غير مسجل في النظام.", variant: "destructive", duration: 5000 });
         setDisplayMessage(`لم يتم العثور على منتج بالباركود: ${barcodeToSearch}`);
-        setTimeout(() => setDisplayMessage("جاهز لاستقبال باركود المنتج."), 3000);
+        setTimeout(() => {
+            // Only reset message if no item is found and user hasn't scanned something else.
+            if (barcodeInputRef.current?.value === "" && !itemDetails) {
+                 setDisplayMessage("جاهز لاستقبال باركود المنتج.");
+            }
+        }, 3000);
       }
     } catch (error) {
-      // toast({ title: "خطأ في البحث", description: "حدث خطأ أثناء البحث عن المنتج.", variant: "destructive", duration: 5000 });
       setDisplayMessage("حدث خطأ أثناء البحث. حاول مرة أخرى.");
-      setTimeout(() => setDisplayMessage("جاهز لاستقبال باركود المنتج."), 3000);
+      setTimeout(() => {
+         if (barcodeInputRef.current?.value === "" && !itemDetails) {
+            setDisplayMessage("جاهز لاستقبال باركود المنتج.");
+         }
+      }, 3000);
       console.error("Error fetching item by barcode:", error);
     } finally {
       setIsLoading(false);
-      setBarcodeInput(""); // Clear input for next scan
+      setBarcodeInput(""); 
+      // Ensure focus for the next scan
       barcodeInputRef.current?.focus();
     }
-  }, [toast]); // Removed barcodeInput from deps, pass it directly
+  }, [toast, setItemDetails, setDisplayMessage, setIsLoading, setBarcodeInput]);
 
   useEffect(() => {
     barcodeInputRef.current?.focus();
     const initialBarcode = searchParams.get('barcode');
     if (initialBarcode) {
-        setBarcodeInput(initialBarcode); // Keep for display if needed, but search with it directly
+        // Set the input value for the user to see, then trigger fetch
+        setBarcodeInput(initialBarcode); 
         handleFetchItemDetails(initialBarcode);
     }
-  }, [searchParams, handleFetchItemDetails]);
+  }, [searchParams, handleFetchItemDetails]); // handleFetchItemDetails is stable
 
+  useEffect(() => {
+    const inputElement = barcodeInputRef.current;
+    if (!inputElement) return;
 
-  // Auto-trigger search on sufficient barcode length or Enter press
-   useEffect(() => {
-    const currentInput = barcodeInputRef.current;
-    const handleInputEvent = (event: Event) => {
-      const inputElement = event.target as HTMLInputElement;
-      const value = inputElement.value;
-      // Common barcode lengths are between 8 and 13 (EAN-8, EAN-13, UPC-A)
-      // Some scanners might input very quickly.
-      if (value.trim().length >= 8 && value.trim().length <= 13) {
-        // Use a very short timeout to allow the scanner to finish inputting
-        // especially if it doesn't send an "Enter" key.
-        const timer = setTimeout(() => {
-          if (document.activeElement === currentInput && currentInput.value === value) { // Check if still focused and value hasn't changed rapidly
-             handleFetchItemDetails(value);
+    let debounceTimer: NodeJS.Timeout;
+
+    const handleAutomaticScan = () => {
+      const currentValue = inputElement.value;
+      // Common barcode lengths. Adjust minLength if needed for very short internal barcodes.
+      // Max length can also be adjusted.
+      if (currentValue.trim().length >= 8 && currentValue.trim().length <= 14) {
+        debounceTimer = setTimeout(() => {
+          // Check if input is still focused and value matches
+          if (document.activeElement === inputElement && inputElement.value === currentValue) {
+            handleFetchItemDetails(currentValue.trim());
           }
-        }, 150); // Adjust if needed, 100-200ms is usually good
-        return () => clearTimeout(timer);
+        }, 200); // Debounce time in ms (e.g., 150-300ms for scanners)
       }
     };
-    
-    const handleKeyDownEvent = (event: KeyboardEvent) => {
-        if (event.key === 'Enter' && barcodeInputRef.current) {
-            event.preventDefault();
-            handleFetchItemDetails(barcodeInputRef.current.value);
-        }
-    };
 
-    currentInput?.addEventListener('input', handleInputEvent);
-    currentInput?.addEventListener('keydown', handleKeyDownEvent);
+    // Handles direct input or fast scanner input
+    inputElement.addEventListener('input', handleAutomaticScan);
+
+    // Handles scanners that send an "Enter" key after scanning
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Enter' && document.activeElement === inputElement) {
+        event.preventDefault(); // Prevent any default form submission
+        clearTimeout(debounceTimer); // Clear any pending debounce from 'input' event
+        handleFetchItemDetails(inputElement.value.trim());
+      }
+    };
+    inputElement.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      currentInput?.removeEventListener('input', handleInputEvent);
-      currentInput?.removeEventListener('keydown', handleKeyDownEvent);
+      clearTimeout(debounceTimer); // Clean up timer on component unmount
+      inputElement.removeEventListener('input', handleAutomaticScan);
+      inputElement.removeEventListener('keydown', handleKeyDown);
     };
-  }, [handleFetchItemDetails]);
-
+  }, [handleFetchItemDetails]); // Re-run if handleFetchItemDetails changes
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4 sm:p-6 md:p-8 selection:bg-primary selection:text-primary-foreground" dir="rtl">
@@ -121,7 +132,7 @@ export default function KioskPriceCheckerPage() {
               type="text"
               placeholder="امسح الباركود هنا..."
               value={barcodeInput}
-              onChange={(e) => setBarcodeInput(e.target.value)}
+              onChange={(e) => setBarcodeInput(e.target.value)} // Controlled component
               className="w-full text-xl h-14 pl-12 pr-4 py-3 border-2 border-primary/30 focus:border-primary focus:ring-primary"
               disabled={isLoading}
               autoComplete="off"
