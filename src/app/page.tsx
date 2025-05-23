@@ -3,16 +3,16 @@
 
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { DollarSign, Users, Package, AlertTriangle, TrendingUp, TrendingDown, Activity, Link as LinkIcon, BarChart2, PieChart as PieChartIcon, FileText, ShoppingBag, Banknote, CheckCircle, Clock, Archive, BookOpenText, Settings } from "lucide-react"; // Added BookOpenText and Settings
+import { DollarSign, Users, Package, AlertTriangle, TrendingUp, TrendingDown, Activity, Link as LinkIcon, BarChart2, PieChart as PieChartIcon, FileText, ShoppingBag, Banknote, CheckCircle, Clock, Archive, BookOpenText, Settings } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { Button } from "@/components/ui/button";
-import Link from "next/link"; 
+import Link from "next/link";
 import React, { useState, useEffect, useCallback } from 'react';
 import { getInvoices } from "@/lib/services/invoicing";
-import { getInventoryItems } from "@/lib/services/inventory";
+import { getProducts } from "@/lib/services/inventory"; // Corrected import
 import { getContacts } from "@/lib/services/contacts";
-import { getJournalEntries } from "@/lib/services/accounting"; 
-import { Badge } from "@/components/ui/badge"; // Added Badge import
+import { getJournalEntries } from "@/lib/services/accounting";
+import { Badge } from "@/components/ui/badge";
 
 interface KpiCardProps {
   title: string;
@@ -61,22 +61,25 @@ export default function DashboardPage() {
     setIsLoading(true);
     try {
         const [invoices, inventory, contacts, journalEntriesData] = await Promise.all([
-            getInvoices(), getInventoryItems(), getContacts(), getJournalEntries()
+            getInvoices(),
+            getProducts(), // Corrected function call
+            getContacts(),
+            getJournalEntries()
         ]);
 
         const totalRevenue = invoices.filter(inv => inv.type === 'Sales' && inv.status === 'Paid').reduce((sum, inv) => sum + inv.totalAmount, 0);
-        const totalExpenses = journalEntriesData.filter(je => je.isPosted && je.details.some(d => d.debit && (d.accountName?.includes("مصروف") || d.accountId.startsWith("accExp")))).reduce((sum, je) => sum + je.details.find(d=>d.debit && (d.accountName?.includes("مصروف") || d.accountId.startsWith("accExp")))!.debit!, 0); 
+        const totalExpenses = journalEntriesData.filter(je => je.isPosted && je.details.some(d => d.debit && (d.accountName?.includes("مصروف") || d.accountId.startsWith("accExp")))).reduce((sum, je) => sum + je.details.find(d=>d.debit && (d.accountName?.includes("مصروف") || d.accountId.startsWith("accExp")))!.debit!, 0);
         const netProfit = totalRevenue - totalExpenses;
-        const activeCustomers = contacts.filter(c => c.type === 'Customer').length; 
+        const activeCustomers = contacts.filter(c => c.type === 'Customer').length;
         const dueInvoicesAmount = invoices.filter(inv => inv.type === 'Sales' && (inv.status === 'Pending' || inv.status === 'Overdue')).reduce((sum, inv) => sum + inv.totalAmount, 0);
         const inventoryValue = inventory.reduce((sum, item) => sum + (item.quantity * item.costPrice), 0);
         const lowStockItems = inventory.filter(item => item.quantity <= item.reorderPoint && item.quantity > 0).length;
         const outOfStockItems = inventory.filter(item => item.quantity === 0).length;
-        
+
 
         setKpiData([
             { title: "إجمالي الإيرادات", value: `${totalRevenue.toFixed(0)} ل.س`, icon: DollarSign, description: "فواتير مبيعات مدفوعة", linkTo: "/invoicing?type=Sales&status=Paid" },
-            { title: "المصروفات", value: `${totalExpenses.toFixed(0)} ل.س`, icon: TrendingDown, description: "الشهر الحالي (مثال)", linkTo: "/accounting" }, 
+            { title: "المصروفات", value: `${totalExpenses.toFixed(0)} ل.س`, icon: TrendingDown, description: "الشهر الحالي (مثال)", linkTo: "/accounting" },
             { title: "صافي الربح", value: `${netProfit.toFixed(0)} ل.س`, icon: TrendingUp, description: "محسوب (مثال)" },
             { title: "العملاء النشطون", value: activeCustomers, icon: Users, description: "إجمالي العملاء", linkTo: "/contacts?type=Customer" },
             { title: "فواتير مستحقة", value: `${dueInvoicesAmount.toFixed(0)} ل.س`, icon: FileText, description: "مبالغ لم يتم تحصيلها", linkTo: "/invoicing?type=Sales&status=Pending" },
@@ -85,13 +88,13 @@ export default function DashboardPage() {
             { title: "أصناف نفذت", value: outOfStockItems, icon: Archive, description: "أصناف غير متوفرة", linkTo: "/inventory?filter=outofstock" },
         ]);
 
-        
+
         const monthlySales: { [key: string]: number } = {};
         invoices.filter(inv => inv.type === 'Sales').forEach(inv => {
             const month = new Date(inv.date.split('/').reverse().join('-')).toLocaleString('ar-EG', { month: 'short' });
             monthlySales[month] = (monthlySales[month] || 0) + inv.totalAmount;
         });
-        setSalesData(Object.entries(monthlySales).map(([name, sales]) => ({ name, sales })).slice(-6)); 
+        setSalesData(Object.entries(monthlySales).map(([name, sales]) => ({ name, sales })).slice(-6));
 
         setExpenseCategoriesData([
             { name: 'إيجارات', value: 5000, color: 'hsl(var(--chart-1))' }, { name: 'رواتب', value: 12000, color: 'hsl(var(--chart-2))' },
@@ -129,7 +132,7 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-  
+
   const quickLinks: { label: string; href: string; icon: React.ElementType }[] = [
     { label: "إنشاء فاتورة جديدة", href: "/invoicing", icon: FileText },
     { label: "إضافة عميل جديد", href: "/contacts", icon: Users },
@@ -142,14 +145,14 @@ export default function DashboardPage() {
   return (
     <>
       <PageHeader title="لوحة التحكم الرئيسية" description="نظرة عامة وشاملة على أداء أعمالك ومؤشراتك الرئيسية." />
-      
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
         {kpiData.map((kpi, index) => (
           <KpiCard key={index} {...kpi} isLoading={isLoading} />
         ))}
          {isLoading && kpiData.length === 0 && Array.from({length: 8}).map((_, i) => <KpiCard key={`skel-${i}`} title=" " value=" " icon={DollarSign} isLoading={true} />) }
       </div>
-      
+
        {(kpiData.length === 0 && salesData.length === 0 && expenseCategoriesData.length === 0 && !isLoading) && (
          <Card className="mb-6 shadow-lg"><CardContent className="pt-6"><p className="text-center text-muted-foreground py-8">لا توجد بيانات لعرضها في لوحة التحكم حالياً.</p></CardContent></Card>
        )}
@@ -190,7 +193,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
-      
+
       <div className="grid gap-6 md:grid-cols-2">
         <Card className="shadow-lg">
           <CardHeader><CardTitle className="flex items-center"><ShoppingBag className="ml-2 h-5 w-5 text-primary"/>الأصناف الأكثر مبيعًا</CardTitle><CardDescription>أكثر 5 أصناف تم بيعها مؤخرًا.</CardDescription></CardHeader>
@@ -222,3 +225,4 @@ export default function DashboardPage() {
   );
 }
 
+    

@@ -13,7 +13,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
-import { getInventoryItems, getInventoryItemByBarcode, InventoryItem } from "@/lib/services/inventory";
+import { getProducts, getInventoryItemByBarcode, InventoryItem } from "@/lib/services/inventory"; // Changed getInventoryItems to getProducts
 import { createInvoice as createInvoiceService, Invoice, InvoiceStatus } from "@/lib/services/invoicing"; 
 import { getContacts, Contact } from "@/lib/services/contacts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -38,7 +38,7 @@ export default function FastInvoicePage() {
     setIsLoadingItems(true);
     try {
       const [itemsData, customersData] = await Promise.all([
-        getInventoryItems(),
+        getProducts(), // Changed from getInventoryItems
         getContacts().then(contacts => contacts.filter(c => c.type === "Customer"))
       ]);
       setAvailableItems(itemsData);

@@ -21,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { getInvoices as getInvoicesService, createInvoice as createInvoiceService, updateInvoice as updateInvoiceService, deleteInvoice as deleteInvoiceService, Invoice, InvoiceItem as InvoiceLineItem, InvoiceStatus, InvoiceType } from "@/lib/services/invoicing";
 import { getContacts, Contact } from "@/lib/services/contacts";
-import { getInventoryItems, InventoryItem, getInventoryItemByBarcode } from "@/lib/services/inventory";
+import { getProducts, InventoryItem, getInventoryItemByBarcode } from "@/lib/services/inventory"; // Changed getInventoryItems to getProducts
 
 // Mappings for display
 const statusMap: Record<InvoiceStatus, string> = {
@@ -186,7 +186,7 @@ function InvoiceDialog({ open, onOpenChange, invoice, onSave, contacts, products
             toast({title: "تم العثور على المنتج", description: `تم تحديث البند: ${product.name}`});
             if (itemBarcodeRefs.current[itemIndex]) itemBarcodeRefs.current[itemIndex]!.value = "";
             
-            const quantityInput = document.getElementById(`items.${itemIndex}.quantity`);
+            const quantityInput = document.getElementById(`items.${index}.quantity`);
             if (quantityInput) {
                 quantityInput.focus();
                 (quantityInput as HTMLInputElement).select();
@@ -441,7 +441,7 @@ export default function InvoicingPage() {
     setIsLoading(true);
     try {
       const [invoicesData, contactsData, productsData] = await Promise.all([
-        getInvoicesService(), getContacts(), getInventoryItems()
+        getInvoicesService(), getContacts(), getProducts() // Changed getInventoryItems to getProducts
       ]);
       setAllInvoices(invoicesData); setContacts(contactsData); setProducts(productsData);
     } catch (error) { toast({ variant: "destructive", title: "خطأ", description: "فشل تحميل بيانات الفواتير." }); }

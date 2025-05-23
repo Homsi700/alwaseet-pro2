@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { PlusCircle, PackageSearch, AlertOctagon, Edit, History, FileWarning, Package, Search, Filter, ListChecks, Repeat, BellDot, Eye, Trash2, Save, QrCode, Printer } from "lucide-react"; // Added QrCode
 import { Badge } from "@/components/ui/badge";
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import Image from "next/image";
@@ -20,7 +20,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
-import { getInventoryItems, getInventoryItemById, addInventoryItem, updateInventoryItem, deleteInventoryItem, getStockMovements, getInventoryAlerts, getInventoryCounts, addInventoryItemWithGeneratedBarcode } from "@/lib/services/inventory";
+import { getProducts, getProductById, createProduct, updateProduct, deleteProduct, getStockMovements_mock, getInventoryAlerts_mock, getInventoryCounts_mock } from "@/lib/services/inventory";
 
 
 type InventoryItemStatus = "متوفر" | "مخزون منخفض" | "نفذ المخزون";
@@ -102,11 +102,13 @@ const inventoryItemFormSchema = z.object({
 });
 type InventoryItemFormData = z.infer<typeof inventoryItemFormSchema>;
 
-const generatedBarcodeItemFormSchema = z.object({
-  ...inventoryItemFormSchemaBase,
-  barcode: z.string().min(1, "الباركود المولد مطلوب"), // Generated barcode is required here
-});
-type GeneratedBarcodeItemFormData = z.infer<typeof generatedBarcodeItemFormSchema>;
+// isGeneratedBarcode flag in ItemDialog will control if barcode is readOnly and auto-generated
+// No need for a separate schema if createProduct handles both.
+// const generatedBarcodeItemFormSchema = z.object({
+//   ...inventoryItemFormSchemaBase,
+//   barcode: z.string().min(1, "الباركود المولد مطلوب"), 
+// });
+// type GeneratedBarcodeItemFormData = z.infer<typeof generatedBarcodeItemFormSchema>;
 
 
 interface ItemDialogProps {
@@ -114,14 +116,14 @@ interface ItemDialogProps {
   onOpenChange: (open: boolean) => void;
   item?: InventoryItem | null;
   onSave: () => void;
-  isGeneratingBarcode?: boolean; // New prop
+  isGeneratingBarcode?: boolean; 
 }
 
 function ItemDialog({ open, onOpenChange, item, onSave, isGeneratingBarcode = false }: ItemDialogProps) {
   const { toast } = useToast();
-  const schema = isGeneratingBarcode ? generatedBarcodeItemFormSchema : inventoryItemFormSchema;
+  const schema = inventoryItemFormSchema; // Use one schema; barcode logic handled in defaultValues/onSubmit
   
-  const form = useForm<InventoryItemFormData | GeneratedBarcodeItemFormData>({
+  const form = useForm<InventoryItemFormData>({ // Use a single form data type
     resolver: zodResolver(schema),
     defaultValues: {
       name: "", sku: "", barcode: "", category: "", unitOfMeasure: "قطعة", quantity: 0,
@@ -134,7 +136,7 @@ function ItemDialog({ open, onOpenChange, item, onSave, isGeneratingBarcode = fa
     if (open) {
       if (isGeneratingBarcode) {
         const generatedSku = `SKU-${Date.now().toString().slice(-6)}`;
-        const generatedBarcode = `INT-${Date.now().toString().slice(-8)}`;
+        const generatedBarcode = `INT-${Date.now().toString().slice(-8)}`; // Generate internal barcode
         form.reset({
           name: "", sku: generatedSku, barcode: generatedBarcode, category: "", unitOfMeasure: "قطعة", quantity: 0,
           reorderPoint: 0, costPrice: 0, sellingPrice: 0, supplierName: "", warehouseName: "",
@@ -166,27 +168,39 @@ function ItemDialog({ open, onOpenChange, item, onSave, isGeneratingBarcode = fa
     }
   }, [item, form, open, isGeneratingBarcode]);
 
-  const onSubmit = async (data: InventoryItemFormData | GeneratedBarcodeItemFormData) => {
+  const onSubmit = async (data: InventoryItemFormData) => {
     try {
       // Ensure SKU is provided if not generating barcode, or use the generated one
       const finalSku = data.sku || (isGeneratingBarcode ? `SKU-${Date.now().toString().slice(-6)}` : `SKU-ERR-${Date.now().toString().slice(-6)}`);
       
-      const itemDataForService = { ...data, sku: finalSku, supplierId: data.supplierName, warehouseId: data.warehouseName };
+      // Prepare payload for createProduct or updateProduct
+      // Omit<InventoryItem, 'id' | 'lastCountDate' | 'isGeneratedBarcode'> for create
+      // Partial<Omit<InventoryItem, 'id' | 'lastCountDate'>> for update
+      const payload = { 
+        ...data, 
+        sku: finalSku,
+        supplierId: data.supplierName, // Assuming supplierName is used as ID for now, adjust if needed
+        warehouseId: data.warehouseName, // Assuming warehouseName is used as ID
+        isGeneratedBarcode: isGeneratingBarcode,
+         // lastCountDate will be handled by backend or default
+      };
+      
+      // Remove fields not expected by backend for createProduct if they are truly optional or backend-generated
+      // Example: if 'lastCountDate' is backend-generated, don't send it from frontend for new items
+      const createPayload: Omit<InventoryItem, 'id' | 'lastCountDate'> = payload as any; 
 
-      if (isGeneratingBarcode) {
-        await addInventoryItemWithGeneratedBarcode(itemDataForService as Omit<InventoryItem, 'id' | 'lastCountDate'> & {barcode: string});
-        toast({ title: "تمت إضافة المنتج بنجاح مع باركود مولّد", description: `باركود المنتج ${data.name}: ${data.barcode}` });
-      } else if (item) {
-        await updateInventoryItem(item.id, itemDataForService);
+
+      if (item && !isGeneratingBarcode) { // Editing existing item
+        await updateProduct(item.id, payload); // updateProduct expects Partial<Product>
         toast({ title: "تم التحديث بنجاح", description: `تم تحديث المنتج ${data.name}.` });
-      } else {
-        if (!data.sku && !data.barcode) {
+      } else { // Adding new item (either with generated barcode or manually entered barcode/sku)
+        if (!data.sku && !data.barcode && !isGeneratingBarcode) {
             form.setError("sku", {message: "يجب توفير SKU أو باركود"});
             form.setError("barcode", {message: "يجب توفير SKU أو باركود"});
             return;
         }
-        await addInventoryItem(itemDataForService as Omit<InventoryItem, 'id' | 'lastCountDate'>);
-        toast({ title: "تمت الإضافة بنجاح", description: `تمت إضافة المنتج ${data.name}.` });
+        await createProduct(createPayload); // createProduct expects Omit<Product, 'id'>
+        toast({ title: "تمت الإضافة بنجاح", description: `تمت إضافة المنتج ${data.name}. ${isGeneratingBarcode ? `باركود مولّد: ${data.barcode}` : ''}` });
       }
       onSave();
       onOpenChange(false);
@@ -436,10 +450,10 @@ export default function InventoryPage() {
     setIsLoading(true);
     try {
       const [itemsData, movementsData, alertsData, countsData] = await Promise.all([
-        getInventoryItems(),
-        getStockMovements(),
-        getInventoryAlerts(),
-        getInventoryCounts()
+        getProducts(),
+        getStockMovements_mock(), // Changed to _mock
+        getInventoryAlerts_mock(), // Changed to _mock
+        getInventoryCounts_mock() // Changed to _mock
       ]);
       setInventoryItems(itemsData);
       setStockMovements(movementsData);
@@ -459,16 +473,19 @@ export default function InventoryPage() {
 
   const handleOpenAddItemDialog = () => {
     setEditingItem(null);
+    setIsGeneratingBarcodeDialogOpen(false); // Ensure this is false
     setIsItemDialogOpen(true);
   };
   
   const handleOpenGenerateBarcodeDialog = () => {
-    setEditingItem(null); // Ensure no item is pre-selected for editing
-    setIsGeneratingBarcodeDialogOpen(true);
+    setEditingItem(null); 
+    setIsItemDialogOpen(false); // Ensure this is false
+    setIsGeneratingBarcodeDialogOpen(true); // This will trigger the correct mode in ItemDialog
   };
 
   const handleEditItem = (item: InventoryItem) => {
     setEditingItem(item);
+    setIsGeneratingBarcodeDialogOpen(false); // Not generating for edit
     setIsItemDialogOpen(true);
   };
   
@@ -480,7 +497,7 @@ export default function InventoryPage() {
   const handleDeleteItem = async (item: InventoryItem) => {
      if (window.confirm(`هل أنت متأكد من حذف المنتج "${item.name}"؟ هذا الإجراء لا يمكن التراجع عنه.`)) {
         try {
-            await deleteInventoryItem(item.id);
+            await deleteProduct(item.id); // Changed to deleteProduct
             toast({ title: "تم الحذف", description: `تم حذف المنتج ${item.name} بنجاح.` });
             fetchData(); 
         } catch (error) {
@@ -756,22 +773,21 @@ export default function InventoryPage() {
           </Card>
         </TabsContent>
       </Tabs>
-      {/* Dialog for adding/editing existing item */}
-      <ItemDialog
+      
+      {isItemDialogOpen && <ItemDialog
         open={isItemDialogOpen}
         onOpenChange={setIsItemDialogOpen}
         item={editingItem}
         onSave={fetchData}
-        isGeneratingBarcode={false}
-      />
-      {/* Dialog for generating barcode and adding new item */}
-      <ItemDialog
-        open={isGeneratingBarcodeDialogOpen}
-        onOpenChange={setIsGeneratingBarcodeDialogOpen}
-        item={null} // No existing item when generating
-        onSave={fetchData}
-        isGeneratingBarcode={true}
-      />
+        isGeneratingBarcode={false} 
+      />}
+      {isGeneratingBarcodeDialogOpen && <ItemDialog 
+        open={isGeneratingBarcodeDialogOpen} 
+        onOpenChange={setIsGeneratingBarcodeDialogOpen} 
+        item={null} 
+        onSave={fetchData} 
+        isGeneratingBarcode={true} 
+      />}
       <ItemDetailsDialog
         open={isDetailsDialogOpen}
         onOpenChange={setIsDetailsDialogOpen}
@@ -786,5 +802,7 @@ export default function InventoryPage() {
     </>
   );
 }
+
+    
 
     
