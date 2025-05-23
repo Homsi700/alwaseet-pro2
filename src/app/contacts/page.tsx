@@ -18,25 +18,7 @@ import * as z from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { getContacts, addContact, updateContact, deleteContact as deleteContactService } from "@/lib/services/contacts";
-
-export interface Contact {
-  id: string;
-  name: string;
-  avatarUrl?: string; 
-  avatarFallback: string;
-  email?: string; // Made optional as per schema
-  phone: string;
-  type: "Customer" | "Supplier"; 
-  balance: number; 
-  lastActivity: string;
-  companyName?: string;
-  address?: string;
-  taxNumber?: string; 
-  contactGroup?: string; 
-  creditLimit?: number; 
-  paymentTerms?: string; 
-}
+import { getContacts, addContact, updateContact, deleteContact as deleteContactService, type Contact } from "@/lib/services/contacts";
 
 const contactFormSchema = z.object({
   name: z.string().min(1, "الاسم مطلوب"),
@@ -56,8 +38,8 @@ type ContactFormData = z.infer<typeof contactFormSchema>;
 interface ContactDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  contact?: Contact | null; // For editing
-  onSave: () => void; // Callback to refresh data
+  contact?: Contact | null; 
+  onSave: () => void; 
 }
 
 function ContactDialog({ open, onOpenChange, contact, onSave }: ContactDialogProps) {
@@ -79,48 +61,50 @@ function ContactDialog({ open, onOpenChange, contact, onSave }: ContactDialogPro
   });
 
   useEffect(() => {
-    if (contact) {
-      form.reset({
-        name: contact.name,
-        type: contact.type,
-        email: contact.email || "",
-        phone: contact.phone,
-        companyName: contact.companyName || "",
-        address: contact.address || "",
-        taxNumber: contact.taxNumber || "",
-        contactGroup: contact.contactGroup || "",
-        creditLimit: contact.type === "Customer" ? contact.creditLimit : undefined,
-        paymentTerms: contact.paymentTerms || "",
-      });
-    } else {
-      form.reset({ // Default values for new contact
-        name: "",
-        type: "Customer",
-        email: "",
-        phone: "",
-        companyName: "",
-        address: "",
-        taxNumber: "",
-        contactGroup: "",
-        creditLimit: undefined,
-        paymentTerms: "",
-      });
+    if (open) {
+      if (contact) {
+        form.reset({
+          name: contact.name,
+          type: contact.type,
+          email: contact.email || "",
+          phone: contact.phone,
+          companyName: contact.companyName || "",
+          address: contact.address || "",
+          taxNumber: contact.taxNumber || "",
+          contactGroup: contact.contactGroup || "",
+          creditLimit: contact.type === "Customer" ? contact.creditLimit : undefined,
+          paymentTerms: contact.paymentTerms || "",
+        });
+      } else { 
+        form.reset({ 
+          name: "",
+          type: "Customer",
+          email: "",
+          phone: "",
+          companyName: "",
+          address: "",
+          taxNumber: "",
+          contactGroup: "",
+          creditLimit: undefined,
+          paymentTerms: "",
+        });
+      }
     }
-  }, [contact, form, open]); // Add open to dependencies to reset form when dialog opens for new contact
+  }, [contact, form, open]);
 
   const onSubmit = async (data: ContactFormData) => {
     try {
-      if (contact) { // Editing
+      if (contact) { 
         await updateContact(contact.id, data);
         toast({ title: "تم التحديث بنجاح", description: `تم تحديث بيانات ${data.name}.` });
-      } else { // Adding
+      } else { 
         await addContact(data as Omit<Contact, 'id' | 'avatarFallback' | 'lastActivity' | 'balance' | 'avatarUrl'>);
         toast({ title: "تمت الإضافة بنجاح", description: `تمت إضافة ${data.name} إلى جهات الاتصال.` });
       }
-      onSave(); // Refresh the list
-      onOpenChange(false); // Close dialog
+      onSave(); 
+      onOpenChange(false); 
     } catch (error) {
-      toast({ variant: "destructive", title: "حدث خطأ", description: "لم يتم حفظ التغييرات. الرجاء المحاولة مرة أخرى." });
+      toast({ variant: "destructive", title: "حدث خطأ", description: (error as Error).message || "لم يتم حفظ التغييرات. الرجاء المحاولة مرة أخرى." });
       console.error("Failed to save contact:", error);
     }
   };
@@ -260,7 +244,13 @@ function ContactDialog({ open, onOpenChange, contact, onSave }: ContactDialogPro
                   <FormItem>
                     <FormLabel>حد الائتمان (للعملاء - اختياري)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="مثال: 5000" {...field} onChange={e => field.onChange(e.target.value === '' ? undefined : +e.target.value)} />
+                      <Input 
+                        type="number" 
+                        placeholder="مثال: 5000" 
+                        {...field} 
+                        value={field.value ?? ''} // Ensure value is not undefined
+                        onChange={e => field.onChange(e.target.value === '' ? undefined : +e.target.value)} 
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -333,8 +323,8 @@ const ContactTable = ({ contacts, type, onEdit, onDelete, onViewTransactions, is
               <TableHead>البريد/الهاتف</TableHead>
               <TableHead>الرقم الضريبي</TableHead>
               <TableHead>المجموعة</TableHead>
-              {type === "Customer" && <TableHead className="text-left">حد الائتمان (ر.س)</TableHead>}
-              <TableHead className="text-left">الرصيد (ر.س)</TableHead>
+              {type === "Customer" && <TableHead className="text-left">حد الائتمان (ل.س)</TableHead>}
+              <TableHead className="text-left">الرصيد (ل.س)</TableHead>
               <TableHead>آخر نشاط</TableHead>
               <TableHead className="text-center">الإجراءات</TableHead>
             </TableRow>
@@ -371,10 +361,10 @@ const ContactTable = ({ contacts, type, onEdit, onDelete, onViewTransactions, is
                 )}
                 <TableCell className={`text-left font-semibold ${contact.balance < 0 ? 'text-red-600' : contact.balance > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
                   {Math.abs(contact.balance).toFixed(2)}
-                  {contact.balance < 0 && contact.type === "Customer" && <Badge variant="destructive" className="mr-1 text-xs">مستحق عليك</Badge>}
-                  {contact.balance > 0 && contact.type === "Customer" && <Badge variant="outline" className="mr-1 text-xs border-green-500 text-green-600">رصيد له</Badge>}
-                  {contact.balance < 0 && contact.type === "Supplier" && <Badge variant="outline" className="mr-1 text-xs border-green-500 text-green-600">رصيد لك</Badge>}
-                  {contact.balance > 0 && contact.type === "Supplier" && <Badge variant="destructive" className="mr-1 text-xs">مستحق له</Badge>}
+                  {contact.balance < 0 && contact.type === "Customer" && <Badge variant="destructive" className="mr-1 text-xs">مدين</Badge>}
+                  {contact.balance > 0 && contact.type === "Customer" && <Badge variant="outline" className="mr-1 text-xs border-green-500 text-green-600">دائن</Badge>}
+                  {contact.balance < 0 && contact.type === "Supplier" && <Badge variant="outline" className="mr-1 text-xs border-green-500 text-green-600">دائن لك</Badge>}
+                  {contact.balance > 0 && contact.type === "Supplier" && <Badge variant="destructive" className="mr-1 text-xs">مدين لك</Badge>}
                   {contact.balance === 0 && <Badge variant="outline" className="mr-1 text-xs">مسدد</Badge>}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">{contact.lastActivity}</TableCell>
@@ -427,14 +417,13 @@ export default function ContactsPage() {
   };
 
   const handleDeleteContact = async (contact: Contact) => {
-    // TODO: Add confirmation dialog here
-    if (confirm(`هل أنت متأكد من حذف ${contact.name}؟ لا يمكن التراجع عن هذا الإجراء.`)) {
+    if (window.confirm(`هل أنت متأكد من حذف ${contact.name}؟ لا يمكن التراجع عن هذا الإجراء.`)) {
       try {
         await deleteContactService(contact.id);
         toast({ title: "تم الحذف بنجاح", description: `تم حذف ${contact.name}.` });
-        fetchContactsData(); // Refresh list
+        fetchContactsData(); 
       } catch (error) {
-        toast({ variant: "destructive", title: "خطأ", description: "فشل حذف جهة الاتصال." });
+        toast({ variant: "destructive", title: "خطأ", description: (error as Error).message || "فشل حذف جهة الاتصال." });
       }
     }
   };
@@ -485,12 +474,15 @@ export default function ContactsPage() {
           />
         </TabsContent>
       </Tabs>
-      <ContactDialog 
+      {isDialogOpen && <ContactDialog 
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         contact={editingContact}
-        onSave={fetchContactsData}
-      />
+        onSave={() => {
+          fetchContactsData();
+          setIsDialogOpen(false); // Close dialog on save
+        }}
+      />}
     </>
   );
 }
