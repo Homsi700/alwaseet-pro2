@@ -1,27 +1,42 @@
 // src/lib/api/index.ts
+// هذا الملف يقوم بتهيئة عميل Axios للاتصال بالخدمات (سواء وهمية أو حقيقية)
+
 import axios from 'axios';
+import { initializeMockServices } from './mockServices'; // تأكدي أن هذا المسار صحيح
 
-// هذا هو الرابط الأساسي (Base URL) للـ Backend API الحقيقي
-// IMPORTANT: Make sure this URL is accessible from where the frontend is running.
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://192.168.1.100:5000/api';
+// تهيئة الخدمات الوهمية بمجرد تحميل التطبيق
+// هذا الجزء سيتولى اعتراض طلبات Axios وتوفير بيانات وهمية بدلاً من الاتصال بـ API حقيقي
+// initializeMockServices(); // تم التعليق مؤقتًا حتى يتم تنفيذ mockServices.ts بشكل كامل
 
+// إنشاء عميل Axios افتراضي
+// في هذه المرحلة، بما أننا نستخدم الـ mock services، فإن baseURL لا يهم كثيراً لأنه سيتم اعتراض الطلبات
+// ولكن من الجيد تحديده بعنوان وهمي ليكون جاهزاً للانتقال إلى API حقيقي لاحقاً
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: 'http://localhost:5000/api', // عنوان وهمي أو افتراضي لـ API في المستقبل
+  timeout: 10000, // مهلة 10 ثوانٍ للطلب
   headers: {
     'Content-Type': 'application/json',
-    // يمكننا إضافة Header لـ Authorization (مثل Token) هنا لاحقاً عندما نصل لميزة تسجيل الدخول
+    // يمكن إضافة headers أخرى هنا لاحقاً مثل التوثيق (Authorization)
   },
 });
 
+// مثال للتعامل مع الأخطاء (يمكننا توسيعها لاحقاً)
 api.interceptors.response.use(
   response => response,
   error => {
-    // مثال للتعامل مع الأخطاء (يمكننا توسيعها لاحقاً)
     if (error.response && error.response.status === 401) {
-      console.error("Unauthorized request, redirecting to login...");
-      // يرجى التأكد من أن الواجهة الأمامية تتعامل مع هذه الحالة بتوجيه المستخدم لصفحة تسجيل الدخول
+      console.error("Unauthorized request, consider redirecting to login...");
       // For example: window.location.href = '/login';
     }
+    // يمكنك إضافة معالجة لأنواع أخرى من الأخطاء هنا
+    // مثل أخطاء الشبكة (error.message === 'Network Error')
+    // أو أخطاء timeout
+    if (error.code === 'ECONNABORTED' && error.message.includes('timeout')) {
+        console.error('Request timed out:', error);
+    } else if (error.message === 'Network Error') {
+        console.error('Network Error. Ensure the backend server is running and accessible.', error);
+    }
+    
     return Promise.reject(error);
   }
 );

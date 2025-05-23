@@ -1,154 +1,107 @@
-
 // src/lib/services/inventory.ts
 'use server';
-import api from '../api';
-import type { InventoryItem as Product, StockMovement, InventoryAlert, InventoryCount } from '@/app/inventory/page'; // Using InventoryItem as Product
 
-// دالة لجلب جميع المنتجات/الأصناف
-export const getProducts = async (): Promise<Product[]> => {
-  try {
-    const response = await api.get<Product[]>('/products');
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching products:', error);
-    // Consider re-throwing a more specific error or handling it as per app's error strategy
-    throw error;
-  }
-};
+// استيراد النوع InventoryItem من مكانه الصحيح
+import type { InventoryItem, StockMovement, InventoryAlert, InventoryCount } from '@/app/inventory/page';
 
-// دالة لجلب منتج/صنف واحد بواسطة الـ ID
-export const getProductById = async (id: string): Promise<Product> => {
-  try {
-    const response = await api.get<Product>(`/products/${id}`);
-    return response.data;
-  } catch (error) {
-    console.error(`Error fetching product with ID ${id}:`, error);
-    throw error;
-  }
-};
+// --- Mock Data ---
+let mockInventoryItems: InventoryItem[] = [
+  { id: 'item1', name: 'لابتوب ديل XPS 15 (وهمي)', sku: 'DELL-XPS15-001', barcode: '1234567890123', category: 'إلكترونيات', unitOfMeasure: 'قطعة', quantity: 25, reorderPoint: 5, costPrice: 4500, sellingPrice: 5500, supplierName: 'شركة ديل السعودية', warehouseName: 'المستودع الرئيسي', expiryDate: '', lastCountDate: '01/07/2024', images: ['https://placehold.co/100x100.png?text=لابتوب'], notes: 'لابتوب بمعالج i7 وذاكرة 16GB', alternativeUnits: [{unit: "كرتونة", conversionFactor: 5}], isGeneratedBarcode: false },
+  { id: 'item2', name: 'قهوة أرابيكا فاخرة (وهمي)', sku: 'COF-ARA-002', barcode: '9876543210987', category: 'مواد غذائية', unitOfMeasure: 'كجم', quantity: 10, reorderPoint: 2, costPrice: 60, sellingPrice: 80, supplierName: 'محمصة البن الذهبي', warehouseName: 'مستودع المواد الغذائية', expiryDate: '31/12/2025', lastCountDate: '15/06/2024', images: ['https://placehold.co/100x100.png?text=قهوة'], notes: 'بن أرابيكا 100%، تحميص متوسط', isGeneratedBarcode: false  },
+  { id: 'item3', name: 'ورق طباعة A4 (وهمي)', sku: 'PAP-A4-WH-003', barcode: '1122334455667', category: 'أدوات مكتبية', unitOfMeasure: 'رزنة', quantity: 100, reorderPoint: 20, costPrice: 15, sellingPrice: 20, supplierName: 'مكتبة النهضة', warehouseName: 'المستودع الرئيسي', lastCountDate: '01/07/2024', isGeneratedBarcode: false  },
+];
 
-// دالة لإنشاء منتج/صنف جديد
-// The backend will assign 'id', 'lastCountDate', and potentially 'isGeneratedBarcode'
-export const createProduct = async (productData: Omit<Product, 'id' | 'lastCountDate' | 'isGeneratedBarcode' | 'images'> & { images?: string[] }): Promise<Product> => {
-  try {
-    const response = await api.post<Product>('/products', productData);
-    return response.data;
-  } catch (error) {
-    console.error('Error creating product:', error);
-    throw error;
-  }
-};
-
-// دالة لتحديث منتج/صنف موجود
-export const updateProduct = async (id: string, productData: Partial<Omit<Product, 'id' | 'lastCountDate'>>): Promise<Product> => {
-  try {
-    const response = await api.put<Product>(`/products/${id}`, productData);
-    return response.data;
-  } catch (error) {
-    console.error(`Error updating product with ID ${id}:`, error);
-    throw error;
-  }
-};
-
-// دالة لحذف منتج/صنف
-export const deleteProduct = async (id: string): Promise<void> => {
-  try {
-    await api.delete(`/products/${id}`);
-  } catch (error) {
-    console.error(`Error deleting product with ID ${id}:`, error);
-    throw error;
-  }
-};
-
-
-// Example: If getInventoryItemByBarcode is still needed from frontend and backend provides it
-export async function getInventoryItemByBarcode(barcode: string): Promise<Product | undefined> {
-  try {
-    // Assuming your backend has an endpoint like GET /products?barcode=XXXX
-    // Or a specific endpoint GET /products/barcode/XXXX
-    const response = await api.get<Product[]>(`/products?barcode=${barcode}`);
-    if (response.data && response.data.length > 0) {
-      return response.data[0]; // Assuming barcode is unique
-    }
-    return undefined;
-  } catch (error) {
-    console.error(`Error fetching product by barcode ${barcode}:`, error);
-    // Decide if to throw or return undefined based on expected behavior
-    // For a "not found" case, returning undefined might be appropriate.
-    // For other errors, re-throwing might be better.
-    if ((error as any).response && (error as any).response.status === 404) {
-        return undefined;
-    }
-    throw error;
-  }
-}
-
-
-// --- Mock service functions for other inventory aspects - to be replaced or removed ---
 let mockStockMovements: StockMovement[] = [
-    { id: 'sm1', date: '20/07/2024 10:00', itemSku: 'SKU-LAP-001', itemName: 'لابتوب ديل XPS (وهمي)', type: 'استلام', quantityChanged: 10, newQuantity: 50, reference: 'PO-123', user: 'admin' },
-    { id: 'sm2', date: '21/07/2024 14:30', itemSku: 'SKU-COF-002', itemName: 'قهوة أرابيكا (وهمي)', type: 'صرف', quantityChanged: -5, newQuantity: 25, reference: 'SO-456', user: 'sales_user' },
+    { id: 'sm1', date: '20/07/2024 10:00', itemSku: 'DELL-XPS15-001', itemName: 'لابتوب ديل XPS 15 (وهمي)', type: 'استلام', quantityChanged: 10, newQuantity: 25, reference: 'PO-123', user: 'admin' },
+    { id: 'sm2', date: '21/07/2024 14:30', itemSku: 'COF-ARA-002', itemName: 'قهوة أرابيكا فاخرة (وهمي)', type: 'صرف', quantityChanged: -5, newQuantity: 10, reference: 'SO-456', user: 'sales_user' },
 ];
 let mockInventoryAlerts: InventoryAlert[] = [
-    { id: 'alert1', type: 'مخزون منخفض', message: 'منتج "قهوة أرابيكا" وصل إلى نقطة إعادة الطلب.', severity: 'warning', date: '22/07/2024', itemSku: 'SKU-COF-002' },
-    { id: 'alert2', type: 'انتهاء صلاحية قريب', message: 'دفعة من منتج "حليب طويل الأجل" ستنتهي صلاحيتها خلال أسبوع.', severity: 'destructive', date: '23/07/2024', itemSku: 'SKU-MILK-001' },
+    { id: 'alert1', type: 'مخزون منخفض', message: 'منتج "قهوة أرابيكا" وصل إلى نقطة إعادة الطلب.', severity: 'warning', date: '22/07/2024', itemSku: 'COF-ARA-002' },
 ];
 let mockInventoryCounts: InventoryCount[] = [
     {id: 'ic1', date: '01/07/2024', warehouseId: 'MAIN-WH', warehouseName: 'المستودع الرئيسي', status: 'مكتمل', countedBy: ' فريق الجرد أ', items: [
-        {itemId: 'item1', itemName: 'لابتوب ديل XPS (وهمي)', expectedQty: 50, countedQty: 49, difference: -1},
-        {itemId: 'item2', itemName: 'قهوة أرابيكا (وهمي)', expectedQty: 30, countedQty: 30, difference: 0},
+        {itemId: 'item1', itemName: 'لابتوب ديل XPS (وهمي)', expectedQty: 15, countedQty: 15, difference: 0},
+        {itemId: 'item2', itemName: 'قهوة أرابيكا (وهمي)', expectedQty: 15, countedQty: 15, difference: 0},
     ]}
 ];
 
-// Renamed from getStockMovements_mock
+// --- Service Functions (CRUD on Mock Data) ---
+
+export async function getProducts(): Promise<InventoryItem[]> {
+  console.log("Service: getProducts (mock) called");
+  await new Promise(resolve => setTimeout(resolve, 100)); // Simulate API delay
+  return JSON.parse(JSON.stringify(mockInventoryItems));
+}
+
+export async function getProductById(id: string): Promise<InventoryItem | undefined> {
+  console.log(`Service: getProductById (mock) called with id: ${id}`);
+  await new Promise(resolve => setTimeout(resolve, 50));
+  const item = mockInventoryItems.find(p => p.id === id);
+  return item ? JSON.parse(JSON.stringify(item)) : undefined;
+}
+
+export async function createProduct(productData: Omit<InventoryItem, 'id' | 'lastCountDate' | 'images'> & { images?: string[] }): Promise<InventoryItem> {
+  console.log("Service: createProduct (mock) called with", productData);
+  await new Promise(resolve => setTimeout(resolve, 100));
+  const newProduct: InventoryItem = {
+    ...productData,
+    id: `item-${Date.now()}`,
+    lastCountDate: new Date().toLocaleDateString('ar-EG', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+    images: productData.images || [],
+    isGeneratedBarcode: !!productData.barcode?.startsWith("INT-"), // A simple check
+  };
+  mockInventoryItems.push(newProduct);
+  return JSON.parse(JSON.stringify(newProduct));
+}
+
+export async function updateProduct(id: string, productUpdateData: Partial<Omit<InventoryItem, 'id'>>): Promise<InventoryItem | null> {
+  console.log(`Service: updateProduct (mock) called for id: ${id} with`, productUpdateData);
+  await new Promise(resolve => setTimeout(resolve, 100));
+  const productIndex = mockInventoryItems.findIndex(p => p.id === id);
+  if (productIndex !== -1) {
+    mockInventoryItems[productIndex] = { ...mockInventoryItems[productIndex], ...productUpdateData };
+    return JSON.parse(JSON.stringify(mockInventoryItems[productIndex]));
+  }
+  return null;
+}
+
+export async function deleteProduct(id: string): Promise<boolean> {
+  console.log(`Service: deleteProduct (mock) called for id: ${id}`);
+  await new Promise(resolve => setTimeout(resolve, 100));
+  const initialLength = mockInventoryItems.length;
+  mockInventoryItems = mockInventoryItems.filter(p => p.id !== id);
+  return mockInventoryItems.length < initialLength;
+}
+
+export async function getInventoryItemByBarcode(barcode: string): Promise<InventoryItem | undefined> {
+  console.log(`Service: getInventoryItemByBarcode (mock) called with barcode: ${barcode}`);
+  await new Promise(resolve => setTimeout(resolve, 50));
+  const item = mockInventoryItems.find(p => p.barcode === barcode);
+  return item ? JSON.parse(JSON.stringify(item)) : undefined;
+}
+
+// --- Other Mock Service Functions ---
 export async function getStockMovements(): Promise<StockMovement[]> {
-  console.log("Fetching stock movements (mock service - to be connected)...");
+  console.log("Service: getStockMovements (mock) called");
   await new Promise(resolve => setTimeout(resolve, 100));
   return JSON.parse(JSON.stringify(mockStockMovements));
 }
 
-// Renamed from getInventoryAlerts_mock
 export async function getInventoryAlerts(): Promise<InventoryAlert[]> {
-  console.log("Fetching inventory alerts (mock service - to be connected)...");
+  console.log("Service: getInventoryAlerts (mock) called");
   await new Promise(resolve => setTimeout(resolve, 100));
   return JSON.parse(JSON.stringify(mockInventoryAlerts));
 }
 
-// Renamed from getInventoryCounts_mock
 export async function getInventoryCounts(): Promise<InventoryCount[]> {
-  console.log("Fetching inventory counts (mock service - to be connected)...");
+  console.log("Service: getInventoryCounts (mock) called");
   await new Promise(resolve => setTimeout(resolve, 100));
   return JSON.parse(JSON.stringify(mockInventoryCounts));
 }
 
-
-// Renaming old functions to avoid conflict and make it clear they are mocks or deprecated
-export async function getInventoryItems_mock(): Promise<Product[]> {
-  console.log("Fetching inventory items (mock service - DEPRECATED, use getProducts for API or specific mocks if needed)...");
-  // This function is problematic if other parts still expect it.
-  // For now, let's return what getProducts would, to avoid breaking UI immediately
-  // but this should ideally be removed and callers updated.
-  // Simulating fetching via API for mock data consistency in UI if needed.
-  // return getProducts(); 
-  return []; // Or return an empty array if it's truly deprecated and no longer used.
-}
-
-export async function addInventoryItem_mock(itemData: Omit<Product, 'id' | 'lastCountDate'>): Promise<Product> {
-  console.log("Adding inventory item (mock service - DEPRECATED):", itemData);
-  throw new Error("Mock function addInventoryItem_mock is deprecated. Use createProduct.");
-}
-
-export async function updateInventoryItem_mock(id: string, itemData: Partial<Omit<Product, 'id' | 'lastCountDate'>>): Promise<Product | null> {
-  console.log("Updating inventory item (mock service - DEPRECATED):", id, itemData);
-  throw new Error("Mock function updateInventoryItem_mock is deprecated. Use updateProduct.");
-}
-
-export async function deleteInventoryItem_mock(id: string): Promise<boolean> {
-  console.log("Deleting inventory item (mock service - DEPRECATED):", id);
-  throw new Error("Mock function deleteInventoryItem_mock is deprecated. Use deleteProduct.");
-}
-
-export async function addInventoryItemWithGeneratedBarcode_mock(itemData: Omit<Product, 'id' | 'lastCountDate' | 'isGeneratedBarcode' | 'images'> & {barcode: string, images?: string[], isGeneratedBarcode: boolean}): Promise<Product> {
-  console.log("Adding inventory item with generated barcode (mock service - DEPRECATED):", itemData);
-   throw new Error("Mock function addInventoryItemWithGeneratedBarcode_mock is deprecated. Use createProduct.");
+// This function was specific to how the frontend dialog was structured for generating barcodes.
+// The createProduct function can handle this logic.
+export async function addInventoryItemWithGeneratedBarcode(itemData: Omit<InventoryItem, 'id' | 'lastCountDate' | 'images'> & { images?: string[], isGeneratedBarcode: boolean }): Promise<InventoryItem> {
+  console.log("Service: addInventoryItemWithGeneratedBarcode (mock) called with", itemData);
+  return createProduct(itemData); // Reuse createProduct logic
 }
