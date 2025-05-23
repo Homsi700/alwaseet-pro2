@@ -2,7 +2,7 @@
 
 export interface InvoiceItem {
   productId: string;
-  productName?: string;
+  productName?: string; // Backend might fetch this based on productId
   quantity: number;
   unitPrice: number;
   discountRate?: number; // e.g., 0.1 for 10%
@@ -26,6 +26,7 @@ export interface Invoice {
   id: string;
   invoiceNumber: string;
   date: string; // Store as ISO string (YYYY-MM-DD), display as DD/MM/YYYY
+  issueDate?: string; // Optional: For alignment with Omit type in createInvoice
   dueDate?: string; // Store as ISO string (YYYY-MM-DD), display as DD/MM/YYYY
   customerSupplierId: string;
   customerSupplierName: string; // Denormalized for display
@@ -42,6 +43,5 @@ export interface Invoice {
   eInvoiceStatus?: string;
   balanceDue?: number; // Calculated by backend: totalAmount - sum of payments
   payments?: Payment[]; // Array of payments made for this invoice
-  // issueDate and lastActivity were in the prompt's Omit but not in original type.
-  // If needed, they can be added here.
+  lastActivity?: string; // Optional: For alignment with Omit type in createInvoice
 }

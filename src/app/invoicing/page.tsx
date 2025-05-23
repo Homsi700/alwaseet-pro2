@@ -20,9 +20,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { getInvoices as getInvoicesService, createInvoice as createInvoiceService, updateInvoice as updateInvoiceService, deleteInvoice as deleteInvoiceService, markInvoiceAsPaid as markInvoiceAsPaidService, addPaymentToInvoice as addPaymentToInvoiceService } from "@/lib/services/invoicing";
-import type { Invoice, InvoiceItem as InvoiceLineItem, InvoiceStatus, InvoiceType, Payment } from "@/types"; // Updated import
-import { getContacts, Contact } from "@/lib/services/contacts";
-import { getProducts, InventoryItem, getInventoryItemByBarcode } from "@/lib/services/inventory";
+import type { Invoice, InvoiceItem as InvoiceLineItem, InvoiceStatus, InvoiceType, Payment } from "@/types";
+import { getContacts, type Contact } from "@/lib/services/contacts"; // Renamed to avoid conflict
+import { getProducts, type InventoryItem, getInventoryItemByBarcode } from "@/lib/services/inventory"; // Renamed to avoid conflict
 
 // Mappings for display
 const statusMap: Record<InvoiceStatus, string> = {
@@ -73,7 +73,6 @@ const invoiceFormSchema = z.object({
   eInvoiceStatus: z.string().optional(), 
   status: z.enum(["Paid", "Pending", "Overdue", "Draft", "Cancelled", "PartiallyPaid"]).default("Draft"),
   items: z.array(invoiceItemSchema).min(1, "يجب إضافة بند واحد على الأقل للفاتورة"),
-  // Fields like amount, taxAmount, totalAmount will be set by backend or calculated before sending to API
 });
 type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
 
@@ -117,7 +116,6 @@ function InvoiceDialog({ open, onOpenChange, invoice, onSave, contacts, products
         const itemIndex = parseInt(name.split('.')[1], 10);
         const currentItemValues = form.getValues(`items.${itemIndex}`);
         const newTotal = calculateItemTotalLocal(currentItemValues);
-        // Only update if different to avoid infinite loops, though react-hook-form handles this well.
         if (currentItemValues.totalPrice !== newTotal) {
             form.setValue(`items.${itemIndex}.totalPrice`, newTotal, { shouldValidate: false, shouldDirty: false, shouldTouch: false });
         }
@@ -163,7 +161,6 @@ function InvoiceDialog({ open, onOpenChange, invoice, onSave, contacts, products
       return;
     }
     
-    // Prepare items for API: remove productName if it's only for display, ensure numbers
     const itemsForApi = data.items.map(item => {
       const product = products.find(p => p.id === item.productId);
       return {
@@ -172,37 +169,55 @@ function InvoiceDialog({ open, onOpenChange, invoice, onSave, contacts, products
         unitPrice: Number(item.unitPrice || (product ? (data.type === "Purchase" ? product.costPrice : product.sellingPrice) : 0)),
         discountRate: Number(item.discountRate || 0),
         taxRate: Number(item.taxRate || 0.15),
-        // totalPrice is calculated by backend or can be sent if frontend calculation is source of truth
       };
     });
     
-    const invoicePayload: any = { // Omit<Invoice, 'id' | 'invoiceNumber' | 'status' | 'amount' | 'taxAmount' | 'totalAmount' | 'balanceDue' | 'payments'>
-      type: data.type,
-      customerSupplierId: data.customerSupplierId,
-      customerSupplierName: customerSupplier.name, // Denormalized for API, backend might prefer just ID
-      date: data.date, // Should be YYYY-MM-DD
-      dueDate: data.dueDate || undefined,
-      paymentMethod: data.paymentMethod || undefined,
-      salesperson: data.salesperson || undefined,
-      notes: data.notes || undefined,
-      isEInvoice: data.isEInvoice,
-      eInvoiceStatus: data.eInvoiceStatus || undefined,
-      items: itemsForApi,
-      // status: data.status, // Backend usually sets initial status for new invoices
+    // Adjusted payload for createInvoice to match Omit type
+    const invoicePayloadBase = {
+        type: data.type,
+        customerSupplierId: data.customerSupplierId,
+        customerSupplierName: customerSupplier.name,
+        date: data.date, // YYYY-MM-DD
+        paymentMethod: data.paymentMethod || undefined,
+        salesperson: data.salesperson || undefined,
+        notes: data.notes || undefined,
+        isEInvoice: data.isEInvoice,
+        eInvoiceStatus: data.eInvoiceStatus || undefined,
+        items: itemsForApi,
     };
-    
-    // For updates, include current status unless it's being changed by a specific action
-    if (invoice && invoice.id) {
-        invoicePayload.status = data.status;
-    }
-
 
     try {
       if (invoice && invoice.id) {
-        await updateInvoiceService(invoice.id, invoicePayload as Partial<Omit<Invoice, 'id' | 'invoiceNumber'>>);
+        const updatePayload = {
+            ...invoicePayloadBase,
+            status: data.status, // status is included for updates
+            dueDate: data.dueDate || undefined, // dueDate is included for updates
+        };
+        await updateInvoiceService(invoice.id, updatePayload as Partial<Omit<Invoice, 'id' | 'invoiceNumber'>>);
         toast({ title: "تم تحديث الفاتورة بنجاح" });
       } else {
-        await createInvoiceService(invoicePayload as Omit<Invoice, 'id' | 'invoiceNumber' | 'status' | 'amount' | 'taxAmount' | 'totalAmount' | 'balanceDue' | 'payments'>);
+        // For createInvoice, dueDate and status are omitted from invoicePayloadBase as per backend instructions
+        // issueDate and lastActivity are also omitted by the Omit type in createInvoiceService
+        // The Omit type in createInvoiceService is: Omit<Invoice, 'id' | 'invoiceNumber' | 'status' | 'amount' | 'taxAmount' | 'totalAmount' | 'balanceDue' | 'payments' | 'issueDate' | 'dueDate' | 'lastActivity'>
+        // So, invoicePayloadBase already fits this if we ensure dueDate and status are not part of it when creating.
+        // The current invoicePayloadBase doesn't explicitly include status or dueDate, so it should be fine.
+        // If backend requires even date and items to be part of a specific sub-object, then the structure of invoicePayloadBase for creation might need adjustment.
+        // Assuming invoicePayloadBase (without dueDate, status, id, invoiceNumber, amounts, payments, issueDate, lastActivity) is what's needed.
+
+        // Let's explicitly define the create payload based on the current service definition
+         const createPayload: Omit<Invoice, 'id' | 'invoiceNumber' | 'status' | 'amount' | 'taxAmount' | 'totalAmount' | 'balanceDue' | 'payments' | 'issueDate' | 'dueDate' | 'lastActivity'> = {
+            type: data.type,
+            customerSupplierId: data.customerSupplierId,
+            customerSupplierName: customerSupplier.name,
+            date: data.date,
+            paymentMethod: data.paymentMethod || undefined,
+            salesperson: data.salesperson || undefined,
+            notes: data.notes || undefined,
+            isEInvoice: data.isEInvoice,
+            eInvoiceStatus: data.eInvoiceStatus || undefined,
+            items: itemsForApi,
+        };
+        await createInvoiceService(createPayload);
         toast({ title: "تم إنشاء الفاتورة بنجاح" });
       }
       onSave(); onOpenChange(false);
@@ -227,13 +242,12 @@ function InvoiceDialog({ open, onOpenChange, invoice, onSave, contacts, products
                 productName: product.name, 
                 unitPrice: price, 
                 quantity: currentItem?.quantity || 1,
-                // Recalculate total price for this item after updating product details
                 totalPrice: calculateItemTotalLocal({productId: product.id, productName: product.name, unitPrice: price, quantity: currentItem?.quantity || 1, taxRate: currentItem?.taxRate || 0.15, discountRate: currentItem?.discountRate || 0})
             });
             toast({title: "تم العثور على المنتج", description: `تم تحديث البند: ${product.name}`});
             if (itemBarcodeRefs.current[itemIndex]) itemBarcodeRefs.current[itemIndex]!.value = "";
             
-            const quantityInput = document.getElementById(`items.${itemIndex}.quantity`);
+            const quantityInput = document.getElementById(`items.${index}.quantity`);
             if (quantityInput) {
                 quantityInput.focus();
                 (quantityInput as HTMLInputElement).select();
@@ -358,6 +372,17 @@ function InvoiceViewDialog({ open, onOpenChange, invoice }: InvoiceViewDialogPro
           <span>مبلغ الضريبة:</span><span className="font-semibold text-left">{invoice.taxAmount.toFixed(2)} ل.س</span>
           <span className="text-lg font-bold">الإجمالي النهائي:</span><span className="text-lg font-bold text-left">{invoice.totalAmount.toFixed(2)} ل.س</span>
         </div>
+        {invoice.payments && invoice.payments.length > 0 && (
+          <div className="pt-2 border-t">
+            <h4 className="font-semibold">الدفعات المسجلة:</h4>
+            {invoice.payments.map(p => (
+              <p key={p.id} className="text-xs">
+                {p.paymentDate ? new Date(p.paymentDate).toLocaleDateString('ar-EG') : 'تاريخ غير محدد'} - {p.amount.toFixed(2)} ل.س ({p.paymentMethod}) {p.notes && `- ${p.notes}`}
+              </p>
+            ))}
+          </div>
+        )}
+        {invoice.balanceDue !== undefined && <p className="font-bold text-destructive">الرصيد المستحق: {invoice.balanceDue.toFixed(2)} ل.س</p>}
         {invoice.isEInvoice && <p className="pt-2"><strong>الفاتورة الإلكترونية:</strong> <Badge variant="outline" className="border-sky-500 text-sky-600">{invoice.eInvoiceStatus || "معدة للإرسال"}</Badge></p>}
         {invoice.notes && <div className="pt-2"><strong>ملاحظات:</strong><p className="p-2 bg-muted/50 rounded-md">{invoice.notes}</p></div>}
       </div>
@@ -370,6 +395,8 @@ interface AddPaymentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   invoiceId: string | null;
+  invoiceTotalAmount?: number;
+  invoiceBalanceDue?: number;
   onPaymentAdded: () => void;
 }
 
@@ -381,27 +408,43 @@ const paymentFormSchema = z.object({
 });
 type PaymentFormData = z.infer<typeof paymentFormSchema>;
 
-function AddPaymentDialog({ open, onOpenChange, invoiceId, onPaymentAdded }: AddPaymentDialogProps) {
+function AddPaymentDialog({ open, onOpenChange, invoiceId, invoiceTotalAmount = 0, invoiceBalanceDue = 0, onPaymentAdded }: AddPaymentDialogProps) {
   const { toast } = useToast();
   const form = useForm<PaymentFormData>({
     resolver: zodResolver(paymentFormSchema),
     defaultValues: {
-      amount: 0,
+      amount: invoiceBalanceDue > 0 ? invoiceBalanceDue : 0,
       paymentDate: new Date().toISOString().split('T')[0],
       paymentMethod: "نقدي",
       notes: "",
     },
   });
 
+ useEffect(() => {
+    if (open) {
+      form.reset({
+        amount: invoiceBalanceDue > 0 ? invoiceBalanceDue : 0,
+        paymentDate: new Date().toISOString().split('T')[0],
+        paymentMethod: "نقدي",
+        notes: "",
+      });
+    }
+  }, [open, invoiceBalanceDue, form]);
+
+
   const onSubmit = async (data: PaymentFormData) => {
     if (!invoiceId) {
       toast({ variant: "destructive", title: "خطأ", description: "لم يتم تحديد فاتورة لإضافة الدفعة." });
       return;
     }
+     if (data.amount > invoiceBalanceDue) {
+      toast({ variant: "destructive", title: "مبلغ زائد", description: `مبلغ الدفعة (${data.amount.toFixed(2)}) أكبر من الرصيد المستحق (${invoiceBalanceDue.toFixed(2)}).` });
+      return;
+    }
     try {
       const paymentPayload: Omit<Payment, 'id'> = {
         amount: data.amount,
-        paymentDate: data.paymentDate ? new Date(data.paymentDate).toISOString() : new Date().toISOString(),
+        paymentDate: data.paymentDate ? new Date(data.paymentDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         paymentMethod: data.paymentMethod,
         notes: data.notes,
       };
@@ -420,7 +463,9 @@ function AddPaymentDialog({ open, onOpenChange, invoiceId, onPaymentAdded }: Add
       <DialogContent dir="rtl">
         <DialogHeader>
           <DialogTitle>إضافة دفعة للفاتورة</DialogTitle>
-          <DialogDescription>أدخل تفاصيل الدفعة الجديدة.</DialogDescription>
+          <DialogDescription>
+            إجمالي الفاتورة: {invoiceTotalAmount.toFixed(2)} ل.س | الرصيد المستحق: {invoiceBalanceDue.toFixed(2)} ل.س
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-2">
@@ -477,7 +522,7 @@ const handlePrintInvoice = (invoice: Invoice, fromDialog = false) => {
             const priceAfterDiscount = itemSubTotal - discountAmount;
             const taxAmountItem = priceAfterDiscount * (item.taxRate || 0);
             const totalItemPrice = priceAfterDiscount + taxAmountItem;
-            printWindow.document.write(`<tr><td>${item.productName}</td><td>${item.quantity}</td><td>${item.unitPrice.toFixed(2)}</td><td>${((item.discountRate || 0) * 100).toFixed(0)}%</td><td>${((item.taxRate || 0) * 100).toFixed(0)}%</td><td>${totalItemPrice.toFixed(2)}</td></tr>`);
+            printWindow.document.write(`<tr><td>${item.productName || 'N/A'}</td><td>${item.quantity}</td><td>${item.unitPrice.toFixed(2)}</td><td>${((item.discountRate || 0) * 100).toFixed(0)}%</td><td>${((item.taxRate || 0) * 100).toFixed(0)}%</td><td>${totalItemPrice.toFixed(2)}</td></tr>`);
         });
         printWindow.document.write('</tbody></table>');
         printWindow.document.write('<div style="clear:both;"></div>');
@@ -485,9 +530,13 @@ const handlePrintInvoice = (invoice: Invoice, fromDialog = false) => {
         printWindow.document.write(`<p><span>المبلغ قبل الضريبة:</span> <strong>${invoice.amount.toFixed(2)} ل.س</strong></p>`);
         printWindow.document.write(`<p><span>مبلغ الضريبة:</span> <strong>${invoice.taxAmount.toFixed(2)} ل.س</strong></p>`);
         printWindow.document.write(`<p style="font-size:1.2em;"><span>الإجمالي الكلي:</span> <strong>${invoice.totalAmount.toFixed(2)} ل.س</strong></p>`);
-        if(invoice.balanceDue !== undefined && invoice.balanceDue < invoice.totalAmount) {
-           printWindow.document.write(`<p><span>المدفوع:</span> <strong>${(invoice.totalAmount - invoice.balanceDue).toFixed(2)} ل.س</strong></p>`);
+        const paidAmount = (invoice.payments || []).reduce((sum, p) => sum + p.amount, 0);
+        if(invoice.balanceDue !== undefined && paidAmount > 0) { // invoice.balanceDue < invoice.totalAmount can be unreliable if payments is empty
+           printWindow.document.write(`<p><span>المدفوع:</span> <strong>${paidAmount.toFixed(2)} ل.س</strong></p>`);
            printWindow.document.write(`<p><span>المتبقي:</span> <strong>${invoice.balanceDue.toFixed(2)} ل.س</strong></p>`);
+        } else if (invoice.status === "Paid") {
+             printWindow.document.write(`<p><span>المدفوع:</span> <strong>${invoice.totalAmount.toFixed(2)} ل.س</strong></p>`);
+             printWindow.document.write(`<p><span>المتبقي:</span> <strong>0.00 ل.س</strong></p>`);
         }
         printWindow.document.write('</div>');
         if(invoice.notes) printWindow.document.write(`<div style="clear:both; margin-top: 15px;"><p><strong>ملاحظات:</strong> ${invoice.notes}</p></div>`);
@@ -505,7 +554,7 @@ const InvoiceTable = ({ invoices, typeLabel, onEdit, onDelete, onView, isLoading
   onView: (invoice: Invoice) => void; 
   isLoading: boolean; 
   onStatusChange: (invoiceId: string, newStatus: InvoiceStatus) => void;
-  onAddPayment: (invoiceId: string) => void;
+  onAddPayment: (invoice: Invoice) => void; // Pass the whole invoice object
 }) => (
   <Card className="shadow-lg">
     <CardHeader>
@@ -557,7 +606,7 @@ const InvoiceTable = ({ invoices, typeLabel, onEdit, onDelete, onView, isLoading
                 <TableCell className="text-center space-x-1">
                   <Button variant="ghost" size="icon" title="عرض تفاصيل الفاتورة" onClick={() => onView(invoice)}><Eye className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="icon" title="طباعة الفاتورة" onClick={() => handlePrintInvoice(invoice)}><Printer className="h-4 w-4" /></Button>
-                   <Button variant="ghost" size="icon" title="إضافة دفعة" onClick={() => onAddPayment(invoice.id)} disabled={invoice.status === 'Paid' || invoice.status === 'Cancelled'}><DollarSign className="h-4 w-4"/></Button>
+                   <Button variant="ghost" size="icon" title="إضافة دفعة" onClick={() => onAddPayment(invoice)} disabled={invoice.status === 'Paid' || invoice.status === 'Cancelled'}><DollarSign className="h-4 w-4"/></Button>
                   <Button variant="ghost" size="icon" title="تعديل الفاتورة" onClick={() => onEdit(invoice)} disabled={invoice.status === "Paid" || invoice.status === "Cancelled"}><Edit className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="icon" title="حذف الفاتورة" className="text-destructive hover:text-destructive" onClick={() => onDelete(invoice)} disabled={invoice.status === "Paid"}><Trash2 className="h-4 w-4" /></Button>
                 </TableCell>
@@ -580,25 +629,24 @@ export default function InvoicingPage() {
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
-  const [invoiceIdForPayment, setInvoiceIdForPayment] = useState<string | null>(null);
+  const [invoiceForPayment, setInvoiceForPayment] = useState<Invoice | null>(null);
 
 
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [products, setProducts] = useState<InventoryItem[]>([]);
+  const [contacts, setContactsData] = useState<Contact[]>([]);
+  const [products, setProductsData] = useState<InventoryItem[]>([]);
 
   const fetchPageData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [invoicesData, contactsData, productsData] = await Promise.all([
+      const [invoicesData, contactsFetchedData, productsFetchedData] = await Promise.all([
         getInvoicesService(), getContacts(), getProducts()
       ]);
       setAllInvoices(invoicesData.map(inv => ({
         ...inv,
-        // Ensure date formats are consistent for display if API returns ISO
         date: inv.date ? new Date(inv.date).toLocaleDateString('ar-EG', { day: '2-digit', month: '2-digit', year: 'numeric' }) : "N/A",
         dueDate: inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('ar-EG', { day: '2-digit', month: '2-digit', year: 'numeric' }) : undefined,
       }))); 
-      setContacts(contactsData); setProducts(productsData);
+      setContactsData(contactsFetchedData); setProductsData(productsFetchedData);
     } catch (error) { 
         toast({ variant: "destructive", title: "خطأ في تحميل البيانات", description: (error as Error).message || "فشل تحميل بيانات الفواتير أو البيانات المرتبطة." }); 
         console.error("Fetch page data error:", error);
@@ -617,7 +665,11 @@ export default function InvoicingPage() {
 
   const handleEditInvoice = (invoice: Invoice) => { setEditingInvoice(invoice); setIsDialogOpen(true); };
   const handleViewInvoice = (invoice: Invoice) => { setViewingInvoice(invoice); setIsViewDialogOpen(true); };
-  const handleOpenPaymentDialog = (invoiceId: string) => { setInvoiceIdForPayment(invoiceId); setIsPaymentDialogOpen(true);};
+  
+  const handleOpenPaymentDialog = (invoice: Invoice) => { 
+    setInvoiceForPayment(invoice); 
+    setIsPaymentDialogOpen(true);
+  };
 
   const handleDeleteInvoice = async (invoice: Invoice) => {
      if (window.confirm(`هل أنت متأكد من حذف ${typeMap[invoice.type]} رقم ${invoice.invoiceNumber}؟`)) {
@@ -627,19 +679,29 @@ export default function InvoicingPage() {
   };
 
   const handleInvoiceStatusChange = async (invoiceId: string, newStatus: InvoiceStatus) => {
+    // Optimistically update UI first
+    const originalInvoices = [...allInvoices];
+    setAllInvoices(prevInvoices => 
+        prevInvoices.map(inv => 
+            inv.id === invoiceId ? { ...inv, status: newStatus, balanceDue: newStatus === "Paid" ? 0 : inv.balanceDue } : inv
+        )
+    );
+
     if (window.confirm(`هل أنت متأكد من تغيير حالة الفاتورة إلى "${statusMap[newStatus]}"؟`)) {
         try {
             if (newStatus === "Paid") {
-                await markInvoiceAsPaidService(invoiceId);
+                await markInvoiceAsPaidService(invoiceId); // Optionally pass paymentDate if needed
             } else {
-                // For other status changes, use the general update endpoint
                 await updateInvoiceService(invoiceId, { status: newStatus });
             }
             toast({ title: "تم تحديث الحالة بنجاح" });
-            fetchPageData();
+            fetchPageData(); // Re-fetch to confirm and get any backend calculated values
         } catch (error) {
+            setAllInvoices(originalInvoices); // Revert optimistic update on error
             toast({ variant: "destructive", title: "خطأ في تحديث الحالة", description: (error as Error).message });
         }
+    } else {
+        setAllInvoices(originalInvoices); // Revert if user cancels confirm
     }
   };
   
@@ -675,7 +737,15 @@ export default function InvoicingPage() {
       </Tabs>
       {isDialogOpen && <InvoiceDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} invoice={editingInvoice} onSave={fetchPageData} contacts={contacts} products={products}/>}
       {isViewDialogOpen && <InvoiceViewDialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen} invoice={viewingInvoice} />}
-      {isPaymentDialogOpen && <AddPaymentDialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen} invoiceId={invoiceIdForPayment} onPaymentAdded={fetchPageData} />}
+      {isPaymentDialogOpen && invoiceForPayment && 
+        <AddPaymentDialog 
+            open={isPaymentDialogOpen} 
+            onOpenChange={setIsPaymentDialogOpen} 
+            invoiceId={invoiceForPayment.id} 
+            invoiceTotalAmount={invoiceForPayment.totalAmount}
+            invoiceBalanceDue={invoiceForPayment.balanceDue}
+            onPaymentAdded={fetchPageData} 
+        />}
     </>
   );
 }

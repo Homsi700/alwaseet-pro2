@@ -1,8 +1,6 @@
 // src/lib/services/invoicing.ts
-'use server';
-
 import api from '../api';
-import type { Invoice, Payment, InvoiceType } from '@/types'; // Adjusted import
+import type { Invoice, Payment, InvoiceType } from '@/types'; // Ensure this path is correct for Invoice and Payment types
 
 // دالة لجلب جميع الفواتير
 export const getInvoices = async (type?: InvoiceType): Promise<Invoice[]> => {
@@ -28,10 +26,9 @@ export const getInvoiceById = async (id: string): Promise<Invoice> => {
 };
 
 // دالة لإنشاء فاتورة جديدة
-// The Omit type from the prompt for createInvoice input:
+// Omit type as per backend's request for createInvoice input:
 // Omit<Invoice, 'id' | 'payments' | 'totalAmount' | 'balanceDue' | 'status' | 'issueDate' | 'dueDate' | 'lastActivity'>
-// Adjusted to match the defined Invoice type more closely, assuming backend handles calculations
-export const createInvoice = async (invoiceData: Omit<Invoice, 'id' | 'invoiceNumber' | 'status' | 'amount' | 'taxAmount' | 'totalAmount' | 'balanceDue' | 'payments'>): Promise<Invoice> => {
+export const createInvoice = async (invoiceData: Omit<Invoice, 'id' | 'invoiceNumber' | 'status' | 'amount' | 'taxAmount' | 'totalAmount' | 'balanceDue' | 'payments' | 'issueDate' | 'dueDate' | 'lastActivity'>): Promise<Invoice> => {
   try {
     // الـ Backend سيتولى توليد الـ ID, invoiceNumber, حساب المبالغ, وتعيين الحالة والتاريخ
     const response = await api.post<Invoice>('/invoices', invoiceData);
@@ -67,7 +64,7 @@ export const deleteInvoice = async (id: string): Promise<void> => {
 export const markInvoiceAsPaid = async (id: string, paymentDate?: string): Promise<Invoice> => {
   try {
     const payload: { paymentDate?: string } = {};
-    if (paymentDate) payload.paymentDate = paymentDate;
+    if (paymentDate) payload.paymentDate = paymentDate; // Ensure paymentDate is in YYYY-MM-DD format if sent
     const response = await api.post<Invoice>(`/invoices/${id}/mark-paid`, payload);
     return response.data;
   } catch (error) {
@@ -79,6 +76,7 @@ export const markInvoiceAsPaid = async (id: string, paymentDate?: string): Promi
 // دالة لإضافة دفعة جزئية لفاتورة
 export const addPaymentToInvoice = async (invoiceId: string, paymentData: Omit<Payment, 'id'>): Promise<Invoice> => {
   try {
+    // Ensure paymentData.paymentDate is in YYYY-MM-DD format if sent
     const response = await api.post<Invoice>(`/invoices/${invoiceId}/payments`, paymentData);
     return response.data;
   } catch (error) {

@@ -13,10 +13,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
-import { getProducts, getInventoryItemByBarcode, InventoryItem } from "@/lib/services/inventory"; 
+import { getProducts, getInventoryItemByBarcode, type InventoryItem } from "@/lib/services/inventory"; 
 import { createInvoice as createInvoiceService } from "@/lib/services/invoicing"; 
-import type { Invoice, InvoiceStatus, InvoiceType } from "@/types"; // Updated import
-import { getContacts, Contact } from "@/lib/services/contacts";
+import type { Invoice, InvoiceStatus } from "@/types"; 
+import { getContacts, type Contact } from "@/lib/services/contacts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 
@@ -105,7 +105,7 @@ export default function FastInvoicePage() {
   useEffect(() => {
     const currentInput = barcodeInputRef.current;
     const handleAutoAdd = () => {
-        if (document.activeElement === currentInput && barcodeInputValue.trim().length >= 8 && barcodeInputValue.trim().length <= 13) { 
+        if (document.activeElement === currentInput && barcodeInputValue.trim().length >= 8 && barcodeInputValue.trim().length <= 14) { 
             handleItemScannedOrEntered(barcodeInputValue);
         }
     }
@@ -137,9 +137,10 @@ export default function FastInvoicePage() {
     setCurrentInvoiceItems(prevItems => prevItems.filter(item => item.id !== itemId));
   };
 
-  const currentTotal = currentInvoiceItems.reduce((sum, item) => sum + item.sellingPrice * item.quantityInInvoice, 0);
-  const taxAmount = currentTotal * 0.15; 
-  const finalTotal = currentTotal + taxAmount;
+  const currentSubTotal = currentInvoiceItems.reduce((sum, item) => sum + item.sellingPrice * item.quantityInInvoice, 0);
+  const taxRateForCalculation = 0.15; // Assuming a fixed tax rate for fast invoice for now
+  const calculatedTaxAmount = currentSubTotal * taxRateForCalculation; 
+  const finalTotal = currentSubTotal + calculatedTaxAmount;
 
   const filteredQuickAddItems = activeCategory === "الكل" 
     ? availableItems 
@@ -165,29 +166,29 @@ export default function FastInvoicePage() {
         customerName = customer.name;
     }
 
-    const invoiceToCreateBackend: Omit<Invoice, 'id' | 'invoiceNumber' | 'status' | 'amount' | 'taxAmount' | 'totalAmount' | 'balanceDue' | 'payments'> = {
-      date: new Date().toISOString().split('T')[0], // YYYY-MM-DD for API
+    // Adjusted to match Omit type for createInvoice
+    const invoiceToCreatePayload: Omit<Invoice, 'id' | 'invoiceNumber' | 'status' | 'amount' | 'taxAmount' | 'totalAmount' | 'balanceDue' | 'payments' | 'issueDate' | 'dueDate' | 'lastActivity'> = {
+      date: new Date().toISOString().split('T')[0],
       customerSupplierId: selectedCustomerId,
       customerSupplierName: customerName,
       type: "Sales",
       paymentMethod: "نقدي", 
       items: currentInvoiceItems.map(ci => ({
         productId: ci.id,
-        // productName: ci.name, // Backend should fetch/validate product name based on ID
         quantity: ci.quantityInInvoice,
         unitPrice: ci.sellingPrice,
-        taxRate: 0.15, 
+        taxRate: taxRateForCalculation, 
         discountRate: 0, 
-        // totalPrice: ci.sellingPrice * ci.quantityInInvoice * 1.15, // Backend calculates this
       })),
       isEInvoice: true, 
+      // eInvoiceStatus, notes, salesperson are optional and not included here for brevity
     };
 
     try {
-      const created = await createInvoiceService(invoiceToCreateBackend);
+      const created = await createInvoiceService(invoiceToCreatePayload);
       toast({ title: "تم إنشاء الفاتورة بنجاح!", description: `رقم الفاتورة: ${created.invoiceNumber}` });
       setCurrentInvoiceItems([]); 
-      await fetchPageData(); // Refetch inventory, etc.
+      await fetchPageData(); 
 
       setTimeout(() => {
          if (window.confirm("هل تريد طباعة الفاتورة؟")) {
@@ -198,15 +199,14 @@ export default function FastInvoicePage() {
                 printWindow.document.write('</head><body>');
                 printWindow.document.write(`<div class="header"><h2>فاتورة ضريبية مبسطة</h2><p>الوسيط برو</p><p>التاريخ: ${new Date(created.date).toLocaleDateString('ar-EG',{day:'2-digit',month:'2-digit',year:'numeric'})}</p><p>رقم الفاتورة: ${created.invoiceNumber}</p><p>العميل: ${customerName}</p></div>`);
                 printWindow.document.write('<table><thead><tr><th>الصنف</th><th>كمية</th><th>سعر (ل.س)</th><th>إجمالي (ل.س)</th></tr></thead><tbody>');
-                created.items.forEach(item => { // Use items from the created invoice from backend
-                    const productDetails = products.find(p => p.id === item.productId);
-                    const itemName = item.productName || productDetails?.name || "منتج غير معروف";
+                created.items.forEach(item => { 
+                    const itemName = item.productName || products.find(p => p.id === item.productId)?.name || "منتج غير معروف"; // Use the product name from invoice if available
                     printWindow.document.write(`<tr class="item-line"><td>${itemName}</td><td>${item.quantity}</td><td>${item.unitPrice.toFixed(2)}</td><td>${(item.quantity * item.unitPrice).toFixed(2)}</td></tr>`);
                 });
                 printWindow.document.write('</tbody></table>');
                 printWindow.document.write('<div class="totals-section">');
                 printWindow.document.write(`<p class="total">الإجمالي الفرعي: ${created.amount.toFixed(2)} ل.س</p>`);
-                printWindow.document.write(`<p class="total">الضريبة (15%): ${created.taxAmount.toFixed(2)} ل.س</p>`);
+                printWindow.document.write(`<p class="total">الضريبة (${(taxRateForCalculation * 100).toFixed(0)}%): ${created.taxAmount.toFixed(2)} ل.س</p>`);
                 printWindow.document.write(`<p class="total" style="font-size: 1.1em;">الإجمالي الكلي: ${created.totalAmount.toFixed(2)} ل.س</p>`);
                 printWindow.document.write('</div>');
                 printWindow.document.write('<p style="text-align:center; font-size: 8pt; margin-top:15px;">شكراً لتعاملكم معنا!</p>')
@@ -396,11 +396,11 @@ export default function FastInvoicePage() {
             <CardFooter className="flex flex-col items-stretch gap-3 pt-4 border-t mt-4">
                 <div className="flex justify-between font-semibold text-lg">
                     <span>الإجمالي الفرعي:</span>
-                    <span>{currentTotal.toFixed(2)} ل.س</span>
+                    <span>{currentSubTotal.toFixed(2)} ل.س</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground text-sm">
-                    <span>الضريبة (15%):</span> 
-                    <span>{taxAmount.toFixed(2)} ل.س</span>
+                    <span>الضريبة ({(taxRateForCalculation * 100).toFixed(0)}%):</span> 
+                    <span>{calculatedTaxAmount.toFixed(2)} ل.س</span>
                 </div>
                 <Separator />
                 <div className="flex justify-between font-bold text-xl text-primary">
@@ -417,4 +417,3 @@ export default function FastInvoicePage() {
     </>
   );
 }
-
