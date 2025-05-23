@@ -1,9 +1,10 @@
+
 "use client";
 
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Briefcase, ChevronDown, User, Settings, CreditCard, LogOut } from "lucide-react"; 
+import { Briefcase, ChevronDown, User, Settings, CreditCard, LogOut, Moon, Sun } from "lucide-react"; 
 import {
   SidebarProvider,
   Sidebar,
@@ -32,20 +33,24 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import React from "react";
+import { useRouter } from "next/navigation"; // For logout redirect
 
 interface AppShellProps {
   children: ReactNode;
+  currentTheme: string;
+  toggleTheme: () => void;
 }
 
 interface GroupedNavItems {
   [key: string]: NavItem[];
 }
 
-export function AppShell({ children }: AppShellProps) {
+export function AppShell({ children, currentTheme, toggleTheme }: AppShellProps) {
   const pathname = usePathname();
+  const router = useRouter(); // Initialize router for logout
 
-  // Hide sidebar and app shell structure for login page
-  if (pathname === "/login") {
+  // Hide sidebar and app shell structure for login page and kiosk page
+  if (pathname === "/login" || pathname.startsWith("/kiosk")) {
     return <>{children}</>;
   }
 
@@ -58,10 +63,16 @@ export function AppShell({ children }: AppShellProps) {
     return acc;
   }, {} as GroupedNavItems);
 
+  const handleLogout = () => {
+    // TODO: Implement actual logout logic (e.g., clear session, token)
+    console.log("Logout clicked");
+    router.push("/login"); // Redirect to login page
+  };
+
   return (
     <SidebarProvider defaultOpen>
-      <Sidebar side="right"> {/* Sidebar on the right */}
-        <SidebarHeader className="p-4">
+      <Sidebar side="right" className="border-l border-sidebar-border"> {/* Sidebar on the right, added border */}
+        <SidebarHeader className="p-4 border-b border-sidebar-border"> {/* Added border */}
           <Link href="/" className="flex items-center gap-2">
             <Briefcase className="h-8 w-8 text-primary" />
             <h1 className="text-xl font-semibold text-sidebar-foreground group-data-[collapsible=icon]:hidden">
@@ -74,17 +85,17 @@ export function AppShell({ children }: AppShellProps) {
             <SidebarMenu>
               {Object.entries(groupedItems).map(([groupName, items]) => (
                 <SidebarGroup key={groupName}>
-                  <SidebarGroupLabel className="group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 text-sidebar-foreground/70">
+                  <SidebarGroupLabel className="group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 text-sidebar-foreground/70 px-2 pt-3 pb-1 text-xs">
                     {groupName}
                   </SidebarGroupLabel>
                   <SidebarGroupContent>
                     {items.map((item) => (
-                      <SidebarMenuItem key={item.href}>
+                      <SidebarMenuItem key={item.href} className="px-2">
                         <SidebarMenuButton
                           asChild
                           isActive={pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href))}
                           tooltip={{ children: item.label, side: "left", className: "bg-primary text-primary-foreground" }}
-                          className="text-sidebar-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                          className="text-sidebar-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground h-9"
                         >
                           <Link href={item.href}>
                             <item.icon />
@@ -102,13 +113,13 @@ export function AppShell({ children }: AppShellProps) {
         <SidebarFooter className="p-2 border-t border-sidebar-border">
            <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="w-full justify-start items-center gap-2 p-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-auto hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src="https://placehold.co/100x100.png" alt="صورة المستخدم" data-ai-hint="user avatar" />
+              <Button variant="ghost" className="w-full justify-start items-center gap-2 p-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-auto hover:bg-sidebar-accent hover:text-sidebar-accent-foreground text-sidebar-foreground">
+                <Avatar className="h-8 w-8 border border-sidebar-border">
+                  <AvatarImage src="https://placehold.co/100x100.png?text=User" alt="صورة المستخدم" data-ai-hint="user avatar" />
                   <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground">م ض</AvatarFallback> 
                 </Avatar>
-                <span className="text-sidebar-foreground group-data-[collapsible=icon]:hidden">المستخدم المسؤول</span>
-                <ChevronDown className="ml-auto h-4 w-4 text-sidebar-foreground group-data-[collapsible=icon]:hidden" />
+                <span className="group-data-[collapsible=icon]:hidden">المستخدم المسؤول</span>
+                <ChevronDown className="mr-auto h-4 w-4 group-data-[collapsible=icon]:hidden" /> {/* Changed ml-auto to mr-auto for RTL */}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent side="top" align="start" className="w-56" dir="rtl">
@@ -118,16 +129,18 @@ export function AppShell({ children }: AppShellProps) {
                 <User className="ml-2 h-4 w-4" />
                 <span>الملف الشخصي</span>
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <CreditCard className="ml-2 h-4 w-4" />
-                <span>الفواتير</span>
+              <DropdownMenuItem onClick={toggleTheme}>
+                {currentTheme === 'dark' ? <Sun className="ml-2 h-4 w-4" /> : <Moon className="ml-2 h-4 w-4" />}
+                <span>تبديل الوضع ({currentTheme === 'dark' ? 'فاتح' : 'داكن'})</span>
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Settings className="ml-2 h-4 w-4" />
-                <span>الإعدادات</span>
+              <DropdownMenuItem asChild>
+                <Link href="/settings">
+                    <Settings className="ml-2 h-4 w-4" />
+                    <span>الإعدادات</span>
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => { /* TODO: Implement logout logic */ console.log("Logout clicked"); }}>
+              <DropdownMenuItem onClick={handleLogout}>
                 <LogOut className="ml-2 h-4 w-4" />
                 <span>تسجيل الخروج</span>
               </DropdownMenuItem>
@@ -137,7 +150,11 @@ export function AppShell({ children }: AppShellProps) {
       </Sidebar>
       <SidebarInset className="flex flex-col">
         <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:h-16 sm:px-6 md:px-8">
-           <SidebarTrigger className="md:hidden" />
+           <SidebarTrigger className="md:hidden text-foreground" />
+           <div className="flex-grow"></div> {/* Spacer */}
+           <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="تبديل الوضع" className="text-foreground">
+            {currentTheme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </Button>
         </header>
         <main className="flex-1 overflow-auto p-4 sm:p-6 md:p-8">
           {children}

@@ -163,9 +163,9 @@ function JournalEntryDialog({ open, onOpenChange, entry, onSave, accounts, costC
                   </div>))}
                 <Button type="button" variant="outline" size="sm" onClick={() => append({ accountId: "", debit: 0, credit: 0 })}><PlusCircle className="ml-2 h-4 w-4" /> إضافة طرف جديد</Button>
                 <div className="grid grid-cols-2 gap-4 mt-4 font-semibold">
-                    <div>إجمالي المدين: {totalDebits.toFixed(2)}</div>
-                    <div>إجمالي الدائن: {totalCredits.toFixed(2)}</div>
-                    {Math.abs(totalDebits - totalCredits) >= 0.001 && <div className="col-span-2 text-destructive">القيد غير متوازن! الفرق: {(totalDebits - totalCredits).toFixed(2)}</div>}
+                    <div>إجمالي المدين: {totalDebits.toFixed(2)} ل.س</div>
+                    <div>إجمالي الدائن: {totalCredits.toFixed(2)} ل.س</div>
+                    {Math.abs(totalDebits - totalCredits) >= 0.001 && <div className="col-span-2 text-destructive">القيد غير متوازن! الفرق: {(totalDebits - totalCredits).toFixed(2)} ل.س</div>}
                 </div>
                  {form.formState.errors.details && <FormMessage>{form.formState.errors.details.message || form.formState.errors.details.root?.message}</FormMessage>}
               </CardContent></Card>
@@ -234,7 +234,7 @@ function VoucherDialog<T extends ReceiptVoucherFormData | PaymentVoucherFormData
   const defaultPersonField = type === "receipt" ? "receivedFrom" : "paidTo";
 
   const form = useForm<T>({
-    resolver: zodResolver(schema as any), // Need to cast schema due to generic type
+    resolver: zodResolver(schema as any), 
     defaultValues: voucher ? { ...voucher, date: voucher.date.split('/').reverse().join('-') } as T : {
       date: new Date().toISOString().split('T')[0], accountId: "", amount: 0, description: "", paymentMethod: "نقدي", [defaultPersonField]: ""
     } as T
@@ -331,10 +331,9 @@ export default function AccountingPage() {
     setIsLoading(true);
     const account = chartOfAccountsData.find(acc => acc.id === selectedLedgerAccountId);
     setLedgerAccount(account || null);
-    // In a real app, this would be a specific API call: getLedgerForAccount(selectedLedgerAccountId, dateRange)
-    // For mock, filter all journal entries
+
     const allDetails: JournalEntryDetail[] = [];
-    const allJournals = await getJournalEntries(); // refetch or use state if sure it's up-to-date
+    const allJournals = await getJournalEntries(); 
     allJournals.forEach(je => {
       je.details.forEach(detail => {
         if (detail.accountId === selectedLedgerAccountId) {
@@ -344,18 +343,13 @@ export default function AccountingPage() {
     });
     allDetails.sort((a: any, b: any) => new Date(a.entryDate.split('/').reverse().join('-')).getTime() - new Date(b.entryDate.split('/').reverse().join('-')).getTime());
     
-    let runningBalance = account?.balance || 0; // Start with opening balance if available
-    // For simplicity in mock, if account.balance reflects opening balance (before any of these journal entries), then it's fine.
-    // Otherwise, if account.balance is a *current* balance, we'd need to work backwards or only calculate deltas.
-    // Let's assume account.balance is an opening balance for this mock ledger.
-    // Or, for a simpler mock, let's just calculate running balance from 0 for the displayed transactions.
-    runningBalance = 0; // For this mock, let's simplify.
+    let runningBalance = 0; 
     const entriesWithRunningBalance = allDetails.map(detail => {
         const debit = detail.debit || 0;
         const credit = detail.credit || 0;
         if (account?.type === "أصول" || account?.type === "مصروفات") {
             runningBalance += debit - credit;
-        } else { // التزامات، حقوق ملكية، إيرادات
+        } else { 
             runningBalance += credit - debit;
         }
         return { ...detail, runningBalance };
@@ -366,7 +360,6 @@ export default function AccountingPage() {
   }, [selectedLedgerAccountId, chartOfAccountsData]);
 
 
-  // Handlers for opening dialogs
   const openDialog = (type: "journal" | "account" | "costCenter" | "receipt" | "payment", item?: any) => {
     if (type === "journal") { setEditingJournalEntry(item); setIsJournalEntryDialogOpen(true); }
     else if (type === "account") { setEditingAccount(item); setIsAccountDialogOpen(true); }
@@ -375,7 +368,6 @@ export default function AccountingPage() {
     else if (type === "payment") { setEditingPaymentVoucher(item); setIsPaymentVoucherDialogOpen(true); }
   };
   
-  // Generic delete handler
   const handleDelete = async (type: "journal" | "account" | "costCenter" | "receipt" | "payment", id: string, name: string) => {
     if (window.confirm(`هل أنت متأكد من حذف "${name}"؟`)) {
       try {
@@ -439,7 +431,7 @@ export default function AccountingPage() {
               {isLoading && <p className="text-center p-4">جار التحميل...</p>}
               {!isLoading && journalEntries.length > 0 ? (
                 <Table>
-                  <TableHeader><TableRow><TableHead>التاريخ</TableHead><TableHead>رقم المرجع</TableHead><TableHead>الوصف</TableHead><TableHead>الحسابات (مدين/دائن)</TableHead><TableHead className="text-left">إجمالي مدين</TableHead><TableHead className="text-left">إجمالي دائن</TableHead><TableHead className="text-center">الحالة</TableHead><TableHead className="text-center">الإجراءات</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow><TableHead>التاريخ</TableHead><TableHead>رقم المرجع</TableHead><TableHead>الوصف</TableHead><TableHead>الحسابات (مدين/دائن)</TableHead><TableHead className="text-left">إجمالي مدين (ل.س)</TableHead><TableHead className="text-left">إجمالي دائن (ل.س)</TableHead><TableHead className="text-center">الحالة</TableHead><TableHead className="text-center">الإجراءات</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {journalEntries.map((entry) => {
                       const totalDebit = entry.details.reduce((sum, d) => sum + (d.debit || 0), 0);
@@ -450,7 +442,7 @@ export default function AccountingPage() {
                         <TableCell>{entry.reference || "-"}</TableCell>
                         <TableCell>{entry.description}</TableCell>
                         <TableCell className="text-xs max-w-xs truncate">
-                          {entry.details.map(d => `${(chartOfAccountsData.find(a=>a.id===d.accountId) || {name:d.accountId}).name} (${d.debit ? `مدين: ${d.debit}` : `دائن: ${d.credit}`})`).join('؛ ')}
+                          {entry.details.map(d => `${(chartOfAccountsData.find(a=>a.id===d.accountId) || {name:d.accountId}).name} (${d.debit ? `مدين: ${d.debit.toFixed(2)}` : `دائن: ${d.credit.toFixed(2)}`})`).join('؛ ')}
                         </TableCell>
                         <TableCell className="text-left">{totalDebit.toFixed(2)}</TableCell>
                         <TableCell className="text-left">{totalCredit.toFixed(2)}</TableCell>
@@ -484,7 +476,7 @@ export default function AccountingPage() {
               {isLoading && <p className="text-center p-4">جار التحميل...</p>}
               {!isLoading && chartOfAccountsData.length > 0 ? (
                 <Table>
-                  <TableHeader><TableRow><TableHead>رمز الحساب</TableHead><TableHead>اسم الحساب</TableHead><TableHead>نوع الحساب</TableHead><TableHead>الحساب الرئيسي</TableHead><TableHead>طبيعة الحساب</TableHead><TableHead className="text-left">الرصيد</TableHead><TableHead className="text-center">الإجراءات</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow><TableHead>رمز الحساب</TableHead><TableHead>اسم الحساب</TableHead><TableHead>نوع الحساب</TableHead><TableHead>الحساب الرئيسي</TableHead><TableHead>طبيعة الحساب</TableHead><TableHead className="text-left">الرصيد (ل.س)</TableHead><TableHead className="text-center">الإجراءات</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {chartOfAccountsData.sort((a,b) => (a.code || "").localeCompare(b.code || "")).map((account) => (
                       <TableRow key={account.id} className={account.isMain ? "bg-muted/50 font-semibold" : ""}>
@@ -550,7 +542,7 @@ export default function AccountingPage() {
               {isLoading && <p className="text-center p-4">جار التحميل...</p>}
               {!isLoading && receiptVouchers.length > 0 ? (
                 <Table>
-                  <TableHeader><TableRow><TableHead>رقم السند</TableHead><TableHead>التاريخ</TableHead><TableHead>الحساب الدائن</TableHead><TableHead>المستلم منه</TableHead><TableHead className="text-left">المبلغ</TableHead><TableHead>طريقة الدفع</TableHead><TableHead>المرجع</TableHead><TableHead>الوصف</TableHead><TableHead className="text-center">الإجراءات</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow><TableHead>رقم السند</TableHead><TableHead>التاريخ</TableHead><TableHead>الحساب الدائن</TableHead><TableHead>المستلم منه</TableHead><TableHead className="text-left">المبلغ (ل.س)</TableHead><TableHead>طريقة الدفع</TableHead><TableHead>المرجع</TableHead><TableHead>الوصف</TableHead><TableHead className="text-center">الإجراءات</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {receiptVouchers.map((voucher) => (
                       <TableRow key={voucher.id}>
@@ -584,7 +576,7 @@ export default function AccountingPage() {
               {isLoading && <p className="text-center p-4">جار التحميل...</p>}
               {!isLoading && paymentVouchers.length > 0 ? (
                 <Table>
-                  <TableHeader><TableRow><TableHead>رقم السند</TableHead><TableHead>التاريخ</TableHead><TableHead>الحساب المدين</TableHead><TableHead>المدفوع له</TableHead><TableHead className="text-left">المبلغ</TableHead><TableHead>طريقة الدفع</TableHead><TableHead>المرجع</TableHead><TableHead>الوصف</TableHead><TableHead className="text-center">الإجراءات</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow><TableHead>رقم السند</TableHead><TableHead>التاريخ</TableHead><TableHead>الحساب المدين</TableHead><TableHead>المدفوع له</TableHead><TableHead className="text-left">المبلغ (ل.س)</TableHead><TableHead>طريقة الدفع</TableHead><TableHead>المرجع</TableHead><TableHead>الوصف</TableHead><TableHead className="text-center">الإجراءات</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {paymentVouchers.map((voucher) => (
                       <TableRow key={voucher.id}>
@@ -635,7 +627,7 @@ export default function AccountingPage() {
                     {ledgerAccount && (
                         <div className="mb-4 p-3 border rounded-md bg-muted/50">
                             <h3 className="text-lg font-semibold">كشف حساب لـ: {ledgerAccount.name} ({ledgerAccount.code})</h3>
-                            <p className="text-sm">نوع الحساب: {ledgerAccount.type} | الرصيد الافتتاحي (مثال): {ledgerAccount.balance.toFixed(2)}</p>
+                            <p className="text-sm">نوع الحساب: {ledgerAccount.type} | الرصيد الافتتاحي (مثال): {ledgerAccount.balance.toFixed(2)} ل.س</p>
                         </div>
                     )}
                     {!isLoading && selectedLedgerAccountId && ledgerEntries.length === 0 && !ledgerAccount && (
@@ -648,8 +640,8 @@ export default function AccountingPage() {
                         <Table>
                             <TableHeader><TableRow>
                                 <TableHead>التاريخ</TableHead><TableHead>المرجع</TableHead><TableHead>الوصف (القيد)</TableHead>
-                                <TableHead className="text-left">مدين</TableHead><TableHead className="text-left">دائن</TableHead>
-                                <TableHead className="text-left">الرصيد</TableHead>
+                                <TableHead className="text-left">مدين (ل.س)</TableHead><TableHead className="text-left">دائن (ل.س)</TableHead>
+                                <TableHead className="text-left">الرصيد (ل.س)</TableHead>
                             </TableRow></TableHeader>
                             <TableBody>
                                 {ledgerEntries.map((detail: any, index) => (

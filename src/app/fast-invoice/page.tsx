@@ -14,13 +14,13 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { getInventoryItems, getInventoryItemByBarcode, InventoryItem } from "@/lib/services/inventory";
-import { createInvoice as createInvoiceService, Invoice } from "@/lib/services/invoicing"; 
+import { createInvoice as createInvoiceService, Invoice, InvoiceStatus } from "@/lib/services/invoicing"; 
 import { getContacts, Contact } from "@/lib/services/contacts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 
 interface CurrentInvoiceItem extends InventoryItem { 
-  quantityInInvoice: number; // Renamed to avoid conflict with InventoryItem.quantity (which is stock)
+  quantityInInvoice: number;
 }
 
 export default function FastInvoicePage() {
@@ -29,7 +29,7 @@ export default function FastInvoicePage() {
   const [availableItems, setAvailableItems] = useState<InventoryItem[]>([]); 
   const [activeCategory, setActiveCategory] = useState<string>("الكل");
   const [customers, setCustomers] = useState<Contact[]>([]);
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>("walk-in"); // Default to walk-in
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>("walk-in"); 
   const { toast } = useToast();
   const [isLoadingItems, setIsLoadingItems] = useState(true);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
@@ -57,72 +57,67 @@ export default function FastInvoicePage() {
   
   const categories = ["الكل", ...new Set(availableItems.map(item => item.category))];
 
-  const handleItemScannedOrEntered = useCallback(async (barcode: string) => {
-    if (!barcode.trim()) {
-      toast({ title: "إدخال فارغ", description: "الرجاء إدخال أو مسح باركود المنتج.", variant: "destructive" });
-      return;
-    }
-    try {
-      const foundItem = await getInventoryItemByBarcode(barcode.trim());
-      if (foundItem) {
-        if (foundItem.quantity > 0) {
-            addItemToInvoice(foundItem);
-            setBarcodeInputValue(""); // Clear input after successful add
-        } else {
-            toast({ title: "نفذ المخزون", description: `منتج "${foundItem.name}" غير متوفر حالياً.`, variant: "destructive"});
-        }
-      } else {
-        toast({ title: "منتج غير موجود", description: "لم يتم العثور على منتج بهذا الباركود.", variant: "destructive" });
-      }
-    } catch (error) {
-        toast({ title: "خطأ في البحث", description: "حدث خطأ أثناء البحث بالباركود.", variant: "destructive" });
-    }
-    barcodeInputRef.current?.focus(); // Always re-focus
-  }, [toast]); // Removed availableItems, addItemToInvoice from deps as they are stable or use state from inside
-
-  // Auto-scan/add on long enough barcode or Enter press
-  useEffect(() => {
-    const handleAutoAdd = () => {
-        if (barcodeInputValue.trim().length >= 8) { // Adjust length as needed
-            handleItemScannedOrEntered(barcodeInputValue);
-        }
-    }
-    // Debounce or use a specific condition for auto-adding
-    const debouncer = setTimeout(handleAutoAdd, 250); // Slight delay
-    return () => clearTimeout(debouncer);
-
-  }, [barcodeInputValue, handleItemScannedOrEntered]);
-
-
-  const addItemToInvoice = (itemToAdd: InventoryItem) => {
+  const addItemToInvoice = useCallback((itemToAdd: InventoryItem, quantity: number = 1) => {
     if (!itemToAdd) return;
 
-    if (itemToAdd.quantity <= 0) {
-      toast({ title: "نفذ المخزون", description: `عذراً، منتج "${itemToAdd.name}" غير متوفر حالياً.`, variant: "destructive"});
+    if (itemToAdd.quantity < quantity) {
+      toast({ title: "كمية غير كافية", description: `عذراً، الكمية المتوفرة من "${itemToAdd.name}" هي ${itemToAdd.quantity} فقط.`, variant: "destructive"});
       return;
     }
 
     setCurrentInvoiceItems(prevItems => {
       const existingItem = prevItems.find(item => item.id === itemToAdd.id);
       if (existingItem) {
-        if (existingItem.quantityInInvoice < itemToAdd.quantity) { 
+        const newQuantityInInvoice = existingItem.quantityInInvoice + quantity;
+        if (newQuantityInInvoice <= itemToAdd.quantity) { 
           return prevItems.map(item => 
-            item.id === itemToAdd.id ? { ...item, quantityInInvoice: item.quantityInInvoice + 1 } : item
+            item.id === itemToAdd.id ? { ...item, quantityInInvoice: newQuantityInInvoice } : item
           );
         } else {
           toast({ title: "الحد الأقصى للكمية", description: `لا يمكن إضافة المزيد من "${itemToAdd.name}", الكمية المتوفرة ${itemToAdd.quantity}.`, variant: "destructive"});
           return prevItems;
         }
       }
-      return [...prevItems, { ...itemToAdd, quantityInInvoice: 1 }];
+      return [...prevItems, { ...itemToAdd, quantityInInvoice: quantity }];
     });
-  };
+    toast({title: "تمت الإضافة", description: `أضيف ${itemToAdd.name} إلى الفاتورة.`});
+  }, [toast]); 
+
+  const handleItemScannedOrEntered = useCallback(async (barcode: string) => {
+    if (!barcode.trim()) {
+      return; 
+    }
+    try {
+      const foundItem = await getInventoryItemByBarcode(barcode.trim());
+      if (foundItem) {
+        addItemToInvoice(foundItem);
+        setBarcodeInputValue(""); 
+      } else {
+        toast({ title: "منتج غير موجود", description: "لم يتم العثور على منتج بهذا الباركود.", variant: "destructive" });
+      }
+    } catch (error) {
+        toast({ title: "خطأ في البحث", description: "حدث خطأ أثناء البحث بالباركود.", variant: "destructive" });
+    }
+    barcodeInputRef.current?.focus(); 
+  }, [toast, addItemToInvoice]); 
+
+  useEffect(() => {
+    const currentInput = barcodeInputRef.current;
+    const handleAutoAdd = () => {
+        if (document.activeElement === currentInput && barcodeInputValue.trim().length >= 8 && barcodeInputValue.trim().length <= 13) { 
+            handleItemScannedOrEntered(barcodeInputValue);
+        }
+    }
+    const debouncer = setTimeout(handleAutoAdd, 150); 
+    return () => clearTimeout(debouncer);
+  }, [barcodeInputValue, handleItemScannedOrEntered]);
+
 
   const updateItemQuantityInInvoice = (itemId: string, newQuantity: number) => {
     setCurrentInvoiceItems(prevItems =>
       prevItems.map(item => {
         if (item.id === itemId) {
-          const originalItemDetails = availableItems.find(i => i.id === itemId); // Get fresh stock data
+          const originalItemDetails = availableItems.find(i => i.id === itemId); 
           if (originalItemDetails && newQuantity > 0 && newQuantity <= originalItemDetails.quantity) {
             return { ...item, quantityInInvoice: newQuantity };
           } else if (originalItemDetails && newQuantity > originalItemDetails.quantity) {
@@ -169,9 +164,8 @@ export default function FastInvoicePage() {
         customerName = customer.name;
     }
 
-
-    const invoiceToCreate: Omit<Invoice, 'id' | 'amount' | 'taxAmount' | 'totalAmount' | 'invoiceNumber' | 'status'> = {
-      date: new Date().toLocaleDateString('fr-CA').split('-').reverse().join('/'), 
+    const invoiceToCreate: Omit<Invoice, 'id' | 'invoiceNumber' | 'status'> = {
+      date: new Date().toLocaleDateString('ar-EG', { day: '2-digit', month: '2-digit', year: 'numeric' }), 
       customerSupplierId: selectedCustomerId,
       customerSupplierName: customerName,
       type: "Sales",
@@ -182,71 +176,53 @@ export default function FastInvoicePage() {
         quantity: ci.quantityInInvoice,
         unitPrice: ci.sellingPrice,
         taxRate: 0.15, 
+        discountRate: 0, 
         totalPrice: ci.sellingPrice * ci.quantityInInvoice * 1.15, 
       })),
       isEInvoice: true, 
+      // These are calculated by createInvoiceService now
+      amount: 0,
+      taxAmount: 0,
+      totalAmount: 0,
     };
 
     try {
-      // Simulate stock update before creating invoice for mock service
-      // In a real backend, this would be transactional
-      const updatedAvailableItems = [...availableItems];
-      let canProceed = true;
-      currentInvoiceItems.forEach(invItem => {
-        const itemIndex = updatedAvailableItems.findIndex(ai => ai.id === invItem.id);
-        if (itemIndex > -1) {
-          if (updatedAvailableItems[itemIndex].quantity >= invItem.quantityInInvoice) {
-            // updatedAvailableItems[itemIndex].quantity -= invItem.quantityInInvoice; // This would be done by backend
-          } else {
-            toast({variant: "destructive", title: "خطأ في المخزون", description: `كمية غير كافية لـ ${invItem.name}`});
-            canProceed = false;
-          }
-        }
-      });
-
-      if (!canProceed) return;
-
-
       const created = await createInvoiceService(invoiceToCreate);
       toast({ title: "تم إنشاء الفاتورة بنجاح!", description: `رقم الفاتورة: ${created.invoiceNumber}` });
       setCurrentInvoiceItems([]); 
-      // setAvailableItems(updatedAvailableItems); // Reflect mock stock change in UI
-      await fetchPageData(); // Refetch to get latest stock info from "server"
+      await fetchPageData(); 
 
-      // Attempt to print (basic window.print for web)
-      // For a real cashier printer, more specific integration is needed
-      // This is a placeholder for print logic.
       setTimeout(() => {
          if (window.confirm("هل تريد طباعة الفاتورة؟")) {
-            // Create a printable version of the invoice (simplified)
-            const printWindow = window.open('', '_blank');
+            const printWindow = window.open('', '_blank', 'width=300,height=500'); 
             if (printWindow) {
                 printWindow.document.write('<html><head><title>فاتورة</title>');
-                printWindow.document.write('<style> body { font-family: Arial, sans-serif; direction: rtl; } table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #ddd; padding: 8px; text-align: right; } .total { font-weight: bold; } </style>');
+                printWindow.document.write('<style> body { font-family: "Tajawal", Arial, sans-serif; direction: rtl; margin: 5mm; font-size: 10pt; } table { width: 100%; border-collapse: collapse; font-size: 9pt; } th, td { padding: 2px; text-align: right; } .header { text-align: center; margin-bottom: 10px; } .header h2 { margin:0; font-size: 12pt;} .header p {margin: 2px 0; font-size: 8pt;} .total { font-weight: bold; } .item-line td { border-bottom: 1px dashed #ccc; } .totals-section { margin-top: 10px; padding-top: 5px; border-top: 1px solid #000;} </style>');
                 printWindow.document.write('</head><body>');
-                printWindow.document.write(`<h2>فاتورة مبيعات - ${created.invoiceNumber}</h2>`);
-                printWindow.document.write(`<p>التاريخ: ${created.date}</p>`);
-                printWindow.document.write(`<p>العميل: ${customerName}</p>`);
-                printWindow.document.write('<table><thead><tr><th>الصنف</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead><tbody>');
+                printWindow.document.write(`<div class="header"><h2>فاتورة ضريبية مبسطة</h2><p>الوسيط برو</p><p>التاريخ: ${created.date}</p><p>رقم الفاتورة: ${created.invoiceNumber}</p><p>العميل: ${customerName}</p></div>`);
+                printWindow.document.write('<table><thead><tr><th>الصنف</th><th>كمية</th><th>سعر (ل.س)</th><th>إجمالي (ل.س)</th></tr></thead><tbody>');
                 created.items.forEach(item => {
-                    printWindow.document.write(`<tr><td>${item.productName}</td><td>${item.quantity}</td><td>${item.unitPrice.toFixed(2)} ل.س</td><td>${(item.quantity * item.unitPrice).toFixed(2)} ل.س</td></tr>`);
+                    printWindow.document.write(`<tr class="item-line"><td>${item.productName}</td><td>${item.quantity}</td><td>${item.unitPrice.toFixed(2)}</td><td>${(item.quantity * item.unitPrice).toFixed(2)}</td></tr>`);
                 });
                 printWindow.document.write('</tbody></table>');
+                printWindow.document.write('<div class="totals-section">');
                 printWindow.document.write(`<p class="total">الإجمالي الفرعي: ${created.amount.toFixed(2)} ل.س</p>`);
                 printWindow.document.write(`<p class="total">الضريبة (15%): ${created.taxAmount.toFixed(2)} ل.س</p>`);
-                printWindow.document.write(`<p class="total" style="font-size: 1.2em;">الإجمالي النهائي: ${created.totalAmount.toFixed(2)} ل.س</p>`);
+                printWindow.document.write(`<p class="total" style="font-size: 1.1em;">الإجمالي الكلي: ${created.totalAmount.toFixed(2)} ل.س</p>`);
+                printWindow.document.write('</div>');
+                printWindow.document.write('<p style="text-align:center; font-size: 8pt; margin-top:15px;">شكراً لتعاملكم معنا!</p>')
                 printWindow.document.write('</body></html>');
                 printWindow.document.close();
+                printWindow.focus(); 
                 printWindow.print();
-                // printWindow.close(); // May close too quickly
             } else {
-                toast({title: "خطأ في الطباعة", description: "لم نتمكن من فتح نافذة الطباعة."});
+                toast({title: "خطأ في الطباعة", description: "لم نتمكن من فتح نافذة الطباعة. يرجى التحقق من إعدادات المتصفح."});
             }
         }
-      }, 500); // Delay to allow toast to show
+      }, 500); 
 
     } catch (error) {
-      toast({ variant: "destructive", title: "خطأ في إنشاء الفاتورة", description: "لم نتمكن من حفظ الفاتورة."});
+      toast({ variant: "destructive", title: "خطأ في إنشاء الفاتورة", description: (error as Error).message || "لم نتمكن من حفظ الفاتورة."});
     }
   };
 
@@ -283,6 +259,7 @@ export default function FastInvoicePage() {
                         }
                       }}
                       className="text-lg py-2.5 flex-grow"
+                      autoFocus
                     />
                   </div>
                   <div className="text-center py-6 text-muted-foreground border border-dashed rounded-md h-[140px] flex items-center justify-center">
@@ -393,7 +370,7 @@ export default function FastInvoicePage() {
                             onChange={(e) => updateItemQuantityInInvoice(item.id, parseInt(e.target.value) || 0)} 
                             className="h-6 w-12 text-center mx-1 px-0 border-muted-foreground/50"
                             min="0" 
-                            max={item.quantity} // Max based on original stock of this item
+                            max={item.quantity} 
                         />
                         <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateItemQuantityInInvoice(item.id, item.quantityInInvoice + 1)}><PlusCircle className="h-3 w-3" /></Button>
                     </div>
@@ -432,10 +409,7 @@ export default function FastInvoicePage() {
                     <span>{finalTotal.toFixed(2)} ل.س</span>
                 </div>
                 <Button size="lg" className="w-full text-lg py-3 mt-2" disabled={currentInvoiceItems.length === 0 || !selectedCustomerId} onClick={handleCheckout}>
-                  <DollarSign className="ml-2 h-5 w-5" /> إتمام والدفع
-                </Button>
-                 <Button variant="outline" size="lg" className="w-full text-lg py-3" onClick={() => { /* TODO: Print Logic */ toast({title: "طباعة الفاتورة", description: "سيتم هنا تنفيذ منطق طباعة الفاتورة الحالية (قيد التطوير)."})}}>
-                  <Printer className="ml-2 h-5 w-5" /> طباعة (تجريبي)
+                  <DollarSign className="ml-2 h-5 w-5" /> إتمام والدفع والطباعة
                 </Button>
             </CardFooter>
           )}

@@ -2,7 +2,7 @@
 // src/lib/services/accounting.ts
 'use server';
 
-import type { JournalEntry, Account, CostCenter, ReceiptVoucher, PaymentVoucher } from '@/app/accounting/page';
+import type { JournalEntry, Account, CostCenter, ReceiptVoucher, PaymentVoucher, JournalEntryDetail } from '@/app/accounting/page'; // Assuming these types are exported
 
 let mockJournalEntries: JournalEntry[] = [
     {
@@ -24,22 +24,22 @@ let mockJournalEntries: JournalEntry[] = [
 ];
 
 let mockAccounts: Account[] = [
+    { id: 'accCurrentAssets', code: '1000', name: 'الأصول المتداولة', type: 'أصول', balance: 0, isMain: true},
     { id: 'accCash', code: '1101', name: 'الصندوق', type: 'أصول', balance: 15000, isMain: false, parentAccountId: 'accCurrentAssets' },
     { id: 'accBank', code: '1102', name: 'البنك - حساب جاري', type: 'أصول', balance: 75000, isMain: false, parentAccountId: 'accCurrentAssets' },
     { id: 'accReceivables', code: '1103', name: 'العملاء (المدينون)', type: 'أصول', balance: 30000, isMain: true, parentAccountId: 'accCurrentAssets' },
-    { id: 'accMerch', code: '1201', name: 'بضاعة أول المدة', type: 'أصول', balance: 120000, isMain: false, parentAccountId: 'accInventory' },
     { id: 'accInventory', code: '1200', name: 'المخزون', type: 'أصول', balance: 0, isMain: true, parentAccountId: 'accCurrentAssets'},
-    { id: 'accCurrentAssets', code: '1000', name: 'الأصول المتداولة', type: 'أصول', balance: 0, isMain: true},
+    { id: 'accMerch', code: '1201', name: 'بضاعة أول المدة', type: 'أصول', balance: 120000, isMain: false, parentAccountId: 'accInventory' },
     { id: 'accFixedAssets', code: '2000', name: 'الأصول الثابتة', type: 'أصول', balance: 250000, isMain: true },
+    { id: 'accCurrentLiabilities', code: '3000', name: 'الالتزامات المتداولة', type: 'التزامات', balance: 0, isMain: true},
     { id: 'accSuppliers', code: '3101', name: 'الموردون (الدائنون)', type: 'التزامات', balance: 45000, isMain: true, parentAccountId: 'accCurrentLiabilities' },
     { id: 'accVATOut', code: '3102', name: 'ضريبة القيمة المضافة المحصلة', type: 'التزامات', balance: 5000, isMain: false, parentAccountId: 'accCurrentLiabilities' },
-    { id: 'accVATIn', code: '7001', name: 'ضريبة القيمة المضافة المدفوعة', type: 'مصروفات', balance: 0, isMain: false, parentAccountId: 'accExpenses' },
     { id: 'accSupplierAnwar', code: '3101-Anwar', name: 'المورد شركة الأنوار', type: 'التزامات', balance: 5750, isMain: false, parentAccountId: 'accSuppliers'},
-    { id: 'accCurrentLiabilities', code: '3000', name: 'الالتزامات المتداولة', type: 'التزامات', balance: 0, isMain: true},
     { id: 'accCapital', code: '4000', name: 'رأس المال', type: 'حقوق ملكية', balance: 300000, isMain: true },
     { id: 'accSales', code: '5000', name: 'المبيعات', type: 'إيرادات', balance: 0, isMain: true },
-    { id: 'accCOGS', code: '6000', name: 'تكلفة البضاعة المباعة', type: 'مصروفات', balance: 0, isMain: true },
     { id: 'accExpenses', code: '7000', name: 'المصروفات التشغيلية', type: 'مصروفات', balance: 0, isMain: true },
+    { id: 'accCOGS', code: '6000', name: 'تكلفة البضاعة المباعة', type: 'مصروفات', balance: 0, isMain: false, parentAccountId: 'accExpenses' },
+    { id: 'accVATIn', code: '7001', name: 'ضريبة القيمة المضافة المدفوعة', type: 'مصروفات', balance: 0, isMain: false, parentAccountId: 'accExpenses' },
 ];
 
 let mockCostCenters: CostCenter[] = [
@@ -139,7 +139,6 @@ export async function updateCostCenter(id: string, ccData: Partial<Omit<CostCent
 }
 export async function deleteCostCenter(id: string): Promise<boolean> {
     await new Promise(resolve => setTimeout(resolve, 200));
-    // Add validation if cost center is in use
     const initialLength = mockCostCenters.length;
     mockCostCenters = mockCostCenters.filter(cc => cc.id !== id);
     return mockCostCenters.length < initialLength;
