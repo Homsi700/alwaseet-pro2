@@ -3,7 +3,7 @@
 
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { DollarSign, Users, Package, AlertTriangle, TrendingUp, TrendingDown, Activity, Link as LinkIcon, BarChart2, PieChart as PieChartIcon, FileText, ShoppingBag, Banknote, CheckCircle, Clock, Archive } from "lucide-react";
+import { DollarSign, Users, Package, AlertTriangle, TrendingUp, TrendingDown, Activity, Link as LinkIcon, BarChart2, PieChart as PieChartIcon, FileText, ShoppingBag, Banknote, CheckCircle, Clock, Archive, BookOpenText, Settings } from "lucide-react"; // Added BookOpenText and Settings
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { Button } from "@/components/ui/button";
 import Link from "next/link"; 
@@ -11,7 +11,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { getInvoices } from "@/lib/services/invoicing";
 import { getInventoryItems } from "@/lib/services/inventory";
 import { getContacts } from "@/lib/services/contacts";
-import { getJournalEntries } from "@/lib/services/accounting"; // Assuming you might want some accounting KPIs
+import { getJournalEntries } from "@/lib/services/accounting"; 
 
 interface KpiCardProps {
   title: string;
@@ -64,20 +64,18 @@ export default function DashboardPage() {
         ]);
 
         const totalRevenue = invoices.filter(inv => inv.type === 'Sales' && inv.status === 'Paid').reduce((sum, inv) => sum + inv.totalAmount, 0);
-        // Mock expenses for now, ideally from journal entries or expense claims
-        const totalExpenses = journalEntriesData.filter(je => je.isPosted && je.details.some(d => d.debit && (d.accountName?.includes("مصروف") || d.accountId.startsWith("accExp")))).reduce((sum, je) => sum + je.details.find(d=>d.debit && (d.accountName?.includes("مصروف") || d.accountId.startsWith("accExp")))!.debit!, 0); // Simplified
+        const totalExpenses = journalEntriesData.filter(je => je.isPosted && je.details.some(d => d.debit && (d.accountName?.includes("مصروف") || d.accountId.startsWith("accExp")))).reduce((sum, je) => sum + je.details.find(d=>d.debit && (d.accountName?.includes("مصروف") || d.accountId.startsWith("accExp")))!.debit!, 0); 
         const netProfit = totalRevenue - totalExpenses;
-        const activeCustomers = contacts.filter(c => c.type === 'Customer').length; // Assuming all are active for mock
+        const activeCustomers = contacts.filter(c => c.type === 'Customer').length; 
         const dueInvoicesAmount = invoices.filter(inv => inv.type === 'Sales' && (inv.status === 'Pending' || inv.status === 'Overdue')).reduce((sum, inv) => sum + inv.totalAmount, 0);
         const inventoryValue = inventory.reduce((sum, item) => sum + (item.quantity * item.costPrice), 0);
         const lowStockItems = inventory.filter(item => item.quantity <= item.reorderPoint && item.quantity > 0).length;
         const outOfStockItems = inventory.filter(item => item.quantity === 0).length;
-        const salesInvoices = invoices.filter(inv => inv.type === 'Sales');
-        const averageInvoiceValue = salesInvoices.length > 0 ? salesInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0) / salesInvoices.length : 0;
+        
 
         setKpiData([
             { title: "إجمالي الإيرادات", value: `${totalRevenue.toFixed(0)} ل.س`, icon: DollarSign, description: "فواتير مبيعات مدفوعة", linkTo: "/invoicing?type=Sales&status=Paid" },
-            { title: "المصروفات", value: `${totalExpenses.toFixed(0)} ل.س`, icon: TrendingDown, description: "الشهر الحالي (مثال)", linkTo: "/accounting?tab=expenses" }, // Placeholder link
+            { title: "المصروفات", value: `${totalExpenses.toFixed(0)} ل.س`, icon: TrendingDown, description: "الشهر الحالي (مثال)", linkTo: "/accounting" }, 
             { title: "صافي الربح", value: `${netProfit.toFixed(0)} ل.س`, icon: TrendingUp, description: "محسوب (مثال)" },
             { title: "العملاء النشطون", value: activeCustomers, icon: Users, description: "إجمالي العملاء", linkTo: "/contacts?type=Customer" },
             { title: "فواتير مستحقة", value: `${dueInvoicesAmount.toFixed(0)} ل.س`, icon: FileText, description: "مبالغ لم يتم تحصيلها", linkTo: "/invoicing?type=Sales&status=Pending" },
@@ -86,22 +84,20 @@ export default function DashboardPage() {
             { title: "أصناف نفذت", value: outOfStockItems, icon: Archive, description: "أصناف غير متوفرة", linkTo: "/inventory?filter=outofstock" },
         ]);
 
-        // Mock sales data by month (example)
+        
         const monthlySales: { [key: string]: number } = {};
         invoices.filter(inv => inv.type === 'Sales').forEach(inv => {
             const month = new Date(inv.date.split('/').reverse().join('-')).toLocaleString('ar-EG', { month: 'short' });
             monthlySales[month] = (monthlySales[month] || 0) + inv.totalAmount;
         });
-        setSalesData(Object.entries(monthlySales).map(([name, sales]) => ({ name, sales })).slice(-6)); // Last 6 months
+        setSalesData(Object.entries(monthlySales).map(([name, sales]) => ({ name, sales })).slice(-6)); 
 
-        // Mock expense categories
         setExpenseCategoriesData([
             { name: 'إيجارات', value: 5000, color: 'hsl(var(--chart-1))' }, { name: 'رواتب', value: 12000, color: 'hsl(var(--chart-2))' },
             { name: 'تسويق', value: 3000, color: 'hsl(var(--chart-3))' }, { name: 'مشتريات مكتبية', value: 1500, color: 'hsl(var(--chart-4))' },
             { name: 'فواتير خدمات', value: 2000, color: 'hsl(var(--chart-5))' },
         ]);
 
-        // Mock top selling products (simplified)
         const productSalesCount: { [key: string]: { name: string, quantity: number } } = {};
         invoices.filter(inv => inv.type === 'Sales').forEach(inv => {
             inv.items.forEach(item => {
@@ -125,7 +121,6 @@ export default function DashboardPage() {
 
     } catch (error) {
         console.error("Failed to fetch dashboard data:", error);
-        // Set empty/error state for KPIs
     }
     setIsLoading(false);
   }, []);
@@ -225,5 +220,3 @@ export default function DashboardPage() {
     </>
   );
 }
-
-    
