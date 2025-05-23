@@ -20,7 +20,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
-import { getProducts, getProductById, createProduct, updateProduct, deleteProduct, getStockMovements_mock, getInventoryAlerts_mock, getInventoryCounts_mock } from "@/lib/services/inventory";
+import { getProducts, getProductById, createProduct, updateProduct, deleteProduct, getStockMovements, getInventoryAlerts, getInventoryCounts } from "@/lib/services/inventory";
 
 
 type InventoryItemStatus = "متوفر" | "مخزون منخفض" | "نفذ المخزون";
@@ -83,7 +83,7 @@ export interface InventoryCount {
 
 const inventoryItemFormSchemaBase = {
   name: z.string().min(1, "اسم المنتج مطلوب"),
-  sku: z.string().min(1, "SKU مطلوب").optional(), // SKU can be optional if barcode is generated
+  sku: z.string().min(1, "SKU مطلوب").optional(), 
   category: z.string().min(1, "الفئة مطلوبة"),
   unitOfMeasure: z.string().min(1, "وحدة القياس مطلوبة"),
   quantity: z.coerce.number().min(0, "الكمية لا يمكن أن تكون سالبة"),
@@ -98,17 +98,9 @@ const inventoryItemFormSchemaBase = {
 
 const inventoryItemFormSchema = z.object({
   ...inventoryItemFormSchemaBase,
-  barcode: z.string().optional(), // Barcode is optional for existing items, can be edited
+  barcode: z.string().optional(), 
 });
 type InventoryItemFormData = z.infer<typeof inventoryItemFormSchema>;
-
-// isGeneratedBarcode flag in ItemDialog will control if barcode is readOnly and auto-generated
-// No need for a separate schema if createProduct handles both.
-// const generatedBarcodeItemFormSchema = z.object({
-//   ...inventoryItemFormSchemaBase,
-//   barcode: z.string().min(1, "الباركود المولد مطلوب"), 
-// });
-// type GeneratedBarcodeItemFormData = z.infer<typeof generatedBarcodeItemFormSchema>;
 
 
 interface ItemDialogProps {
@@ -121,9 +113,9 @@ interface ItemDialogProps {
 
 function ItemDialog({ open, onOpenChange, item, onSave, isGeneratingBarcode = false }: ItemDialogProps) {
   const { toast } = useToast();
-  const schema = inventoryItemFormSchema; // Use one schema; barcode logic handled in defaultValues/onSubmit
+  const schema = inventoryItemFormSchema; 
   
-  const form = useForm<InventoryItemFormData>({ // Use a single form data type
+  const form = useForm<InventoryItemFormData>({ 
     resolver: zodResolver(schema),
     defaultValues: {
       name: "", sku: "", barcode: "", category: "", unitOfMeasure: "قطعة", quantity: 0,
@@ -135,8 +127,9 @@ function ItemDialog({ open, onOpenChange, item, onSave, isGeneratingBarcode = fa
   useEffect(() => {
     if (open) {
       if (isGeneratingBarcode) {
-        const generatedSku = `SKU-${Date.now().toString().slice(-6)}`;
-        const generatedBarcode = `INT-${Date.now().toString().slice(-8)}`; // Generate internal barcode
+        const timestamp = Date.now().toString();
+        const generatedSku = `SKU-${timestamp.slice(-6)}`;
+        const generatedBarcode = `INT-${timestamp.slice(-8)}`; 
         form.reset({
           name: "", sku: generatedSku, barcode: generatedBarcode, category: "", unitOfMeasure: "قطعة", quantity: 0,
           reorderPoint: 0, costPrice: 0, sellingPrice: 0, supplierName: "", warehouseName: "",
@@ -158,7 +151,7 @@ function ItemDialog({ open, onOpenChange, item, onSave, isGeneratingBarcode = fa
           expiryDate: item.expiryDate || "",
           notes: item.notes || "",
         });
-      } else { // Adding new item (not generating barcode)
+      } else { 
         form.reset({
           name: "", sku: "", barcode: "", category: "", unitOfMeasure: "قطعة", quantity: 0,
           reorderPoint: 0, costPrice: 0, sellingPrice: 0, supplierName: "", warehouseName: "",
@@ -170,36 +163,31 @@ function ItemDialog({ open, onOpenChange, item, onSave, isGeneratingBarcode = fa
 
   const onSubmit = async (data: InventoryItemFormData) => {
     try {
-      // Ensure SKU is provided if not generating barcode, or use the generated one
-      const finalSku = data.sku || (isGeneratingBarcode ? `SKU-${Date.now().toString().slice(-6)}` : `SKU-ERR-${Date.now().toString().slice(-6)}`);
+      const finalSku = data.sku || (isGeneratingBarcode ? `SKU-AUTO-${Date.now().toString().slice(-6)}` : `SKU-ERR-${Date.now().toString().slice(-6)}`);
       
-      // Prepare payload for createProduct or updateProduct
-      // Omit<InventoryItem, 'id' | 'lastCountDate' | 'isGeneratedBarcode'> for create
-      // Partial<Omit<InventoryItem, 'id' | 'lastCountDate'>> for update
-      const payload = { 
+      const payload: Omit<InventoryItem, 'id' | 'lastCountDate' | 'isGeneratedBarcode' | 'images'> & { images?: string[], isGeneratedBarcode?: boolean } = { 
         ...data, 
         sku: finalSku,
-        supplierId: data.supplierName, // Assuming supplierName is used as ID for now, adjust if needed
-        warehouseId: data.warehouseName, // Assuming warehouseName is used as ID
-        isGeneratedBarcode: isGeneratingBarcode,
-         // lastCountDate will be handled by backend or default
+        // Assuming backend will handle supplierId and warehouseId if names are provided
+        // images: data.images or some other mechanism for image upload
       };
-      
-      // Remove fields not expected by backend for createProduct if they are truly optional or backend-generated
-      // Example: if 'lastCountDate' is backend-generated, don't send it from frontend for new items
-      const createPayload: Omit<InventoryItem, 'id' | 'lastCountDate'> = payload as any; 
+      if (isGeneratingBarcode) {
+          payload.isGeneratedBarcode = true;
+      }
 
 
-      if (item && !isGeneratingBarcode) { // Editing existing item
-        await updateProduct(item.id, payload); // updateProduct expects Partial<Product>
+      if (item && !isGeneratingBarcode) { 
+        // For update, we send Partial<Omit<Product, 'id' | 'lastCountDate'>>
+        // This is slightly different from create payload structure; adjust if backend expects different
+        await updateProduct(item.id, payload); 
         toast({ title: "تم التحديث بنجاح", description: `تم تحديث المنتج ${data.name}.` });
-      } else { // Adding new item (either with generated barcode or manually entered barcode/sku)
+      } else { 
         if (!data.sku && !data.barcode && !isGeneratingBarcode) {
             form.setError("sku", {message: "يجب توفير SKU أو باركود"});
             form.setError("barcode", {message: "يجب توفير SKU أو باركود"});
             return;
         }
-        await createProduct(createPayload); // createProduct expects Omit<Product, 'id'>
+        await createProduct(payload); 
         toast({ title: "تمت الإضافة بنجاح", description: `تمت إضافة المنتج ${data.name}. ${isGeneratingBarcode ? `باركود مولّد: ${data.barcode}` : ''}` });
       }
       onSave();
@@ -230,10 +218,10 @@ function ItemDialog({ open, onOpenChange, item, onSave, isGeneratingBarcode = fa
                 <FormItem><FormLabel>اسم المنتج</FormLabel><FormControl><Input placeholder="مثال: لابتوب ديل" {...field} /></FormControl><FormMessage /></FormItem>
               )}/>
               <FormField control={form.control} name="sku" render={({ field }) => (
-                <FormItem><FormLabel>SKU (رمز تعريف المنتج)</FormLabel><FormControl><Input placeholder={isGeneratingBarcode ? "سيتم توليده تلقائياً" : "مثال: DELL-XPS-001"} {...field} readOnly={isGeneratingBarcode && !!form.watch("barcode")} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>SKU (رمز تعريف المنتج)</FormLabel><FormControl><Input placeholder={isGeneratingBarcode ? form.getValues("sku") : "مثال: DELL-XPS-001"} {...field} readOnly={isGeneratingBarcode && !!form.watch("barcode")} /></FormControl><FormMessage /></FormItem>
               )}/>
             </div>
-            {!isGeneratingBarcode && ( // Barcode field is only for manual entry/edit, not for generated one which is shown above
+            {!isGeneratingBarcode && ( 
                  <FormField control={form.control} name="barcode" render={({ field }) => (
                     <FormItem><FormLabel>الباركود (اختياري)</FormLabel><FormControl><Input placeholder="مثال: 1234567890123" {...field} /></FormControl><FormMessage /></FormItem>
                   )}/>
@@ -375,8 +363,6 @@ function PrintLabelDialog({ open, onOpenChange, item }: PrintLabelDialogProps) {
         printWindow.document.write('<button class="no-print" onclick="window.print(); setTimeout(window.close, 100);" style="margin-top:10px; padding:5px 10px;">طباعة</button>');
         printWindow.document.write('</body></html>');
         printWindow.document.close();
-        // printWindow.focus(); // Focus is sometimes blocked
-        // printWindow.print(); // Auto print can be blocked
       } else {
         alert("متصفحك منع فتح نافذة الطباعة. يرجى السماح بالنوافذ المنبثقة.");
       }
@@ -431,9 +417,9 @@ const getStatusBadgeVariant = (status: InventoryItemStatus) => {
 
 export default function InventoryPage() {
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
-  const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
-  const [inventoryAlerts, setInventoryAlerts] = useState<InventoryAlert[]>([]);
-  const [inventoryCounts, setInventoryCounts] = useState<InventoryCount[]>([]);
+  const [stockMovementsData, setStockMovementsData] = useState<StockMovement[]>([]);
+  const [inventoryAlertsData, setInventoryAlertsData] = useState<InventoryAlert[]>([]);
+  const [inventoryCountsData, setInventoryCountsData] = useState<InventoryCount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
@@ -451,14 +437,14 @@ export default function InventoryPage() {
     try {
       const [itemsData, movementsData, alertsData, countsData] = await Promise.all([
         getProducts(),
-        getStockMovements_mock(), // Changed to _mock
-        getInventoryAlerts_mock(), // Changed to _mock
-        getInventoryCounts_mock() // Changed to _mock
+        getStockMovements(), 
+        getInventoryAlerts(), 
+        getInventoryCounts() 
       ]);
       setInventoryItems(itemsData);
-      setStockMovements(movementsData);
-      setInventoryAlerts(alertsData);
-      setInventoryCounts(countsData);
+      setStockMovementsData(movementsData);
+      setInventoryAlertsData(alertsData);
+      setInventoryCountsData(countsData);
     } catch (error) {
       console.error("Failed to fetch inventory data:", error);
       toast({ variant: "destructive", title: "خطأ", description: "فشل تحميل بيانات المخزون." });
@@ -473,19 +459,19 @@ export default function InventoryPage() {
 
   const handleOpenAddItemDialog = () => {
     setEditingItem(null);
-    setIsGeneratingBarcodeDialogOpen(false); // Ensure this is false
+    setIsGeneratingBarcodeDialogOpen(false); 
     setIsItemDialogOpen(true);
   };
   
   const handleOpenGenerateBarcodeDialog = () => {
     setEditingItem(null); 
-    setIsItemDialogOpen(false); // Ensure this is false
-    setIsGeneratingBarcodeDialogOpen(true); // This will trigger the correct mode in ItemDialog
+    setIsItemDialogOpen(false); 
+    setIsGeneratingBarcodeDialogOpen(true); 
   };
 
   const handleEditItem = (item: InventoryItem) => {
     setEditingItem(item);
-    setIsGeneratingBarcodeDialogOpen(false); // Not generating for edit
+    setIsGeneratingBarcodeDialogOpen(false); 
     setIsItemDialogOpen(true);
   };
   
@@ -497,7 +483,7 @@ export default function InventoryPage() {
   const handleDeleteItem = async (item: InventoryItem) => {
      if (window.confirm(`هل أنت متأكد من حذف المنتج "${item.name}"؟ هذا الإجراء لا يمكن التراجع عنه.`)) {
         try {
-            await deleteProduct(item.id); // Changed to deleteProduct
+            await deleteProduct(item.id); 
             toast({ title: "تم الحذف", description: `تم حذف المنتج ${item.name} بنجاح.` });
             fetchData(); 
         } catch (error) {
@@ -610,7 +596,7 @@ export default function InventoryPage() {
                             <Badge variant={getStatusBadgeVariant(status)} className={`text-xs ${status === 'نفذ المخزون' ? 'bg-destructive text-destructive-foreground' : ''}`}>{status}</Badge>
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">{item.lastCountDate}</TableCell>
-                          <TableCell className="text-center space-x-0.5"> {/* Reduced space */}
+                          <TableCell className="text-center space-x-0.5"> 
                             <Button variant="ghost" size="icon" className="h-7 w-7" title="عرض التفاصيل" onClick={() => handleViewItemDetails(item)}><Eye className="h-4 w-4" /></Button>
                             <Button variant="ghost" size="icon" className="h-7 w-7" title="تعديل المنتج" onClick={() => handleEditItem(item)}><Edit className="h-4 w-4" /></Button>
                             {item.barcode && <Button variant="ghost" size="icon" className="h-7 w-7" title="طباعة ملصق الباركود" onClick={() => handlePrintLabel(item)}><Printer className="h-4 w-4"/></Button> }
@@ -641,14 +627,14 @@ export default function InventoryPage() {
             </CardHeader>
             <CardContent>
                {isLoading && <p className="text-center p-4">جاري تحميل حركات المخزون...</p>}
-               {!isLoading && stockMovements.length === 0 && (
+               {!isLoading && stockMovementsData.length === 0 && (
                  <div className="text-center text-muted-foreground py-10">
                     <History className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                     <p className="text-lg">لا توجد حركات مخزون مسجلة حاليًا.</p>
                     <p className="text-sm">ستظهر هنا جميع عمليات استلام وصرف وتعديل المخزون.</p>
                 </div>
               )}
-              {!isLoading && stockMovements.length > 0 && (
+              {!isLoading && stockMovementsData.length > 0 && (
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -664,7 +650,7 @@ export default function InventoryPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {stockMovements.map((movement) => (
+                    {stockMovementsData.map((movement) => (
                       <TableRow key={movement.id}>
                         <TableCell className="text-sm text-muted-foreground">{movement.date}</TableCell>
                         <TableCell className="font-medium">{movement.itemName} <span className="text-xs text-muted-foreground">({movement.itemSku})</span></TableCell>
@@ -697,14 +683,14 @@ export default function InventoryPage() {
                 </CardHeader>
                 <CardContent>
                   {isLoading && <p className="text-center p-4">جاري تحميل عمليات الجرد...</p>}
-                  {!isLoading && inventoryCounts.length === 0 && (
+                  {!isLoading && inventoryCountsData.length === 0 && (
                     <div className="text-center text-muted-foreground py-10">
                         <ListChecks className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                         <p className="text-lg">لا توجد عمليات جرد مسجلة حاليًا.</p>
                         <p className="text-sm">ابدأ عملية جرد جديدة لتحديث كميات المخزون.</p>
                     </div>
                    )}
-                   {!isLoading && inventoryCounts.length > 0 && (
+                   {!isLoading && inventoryCountsData.length > 0 && (
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -717,7 +703,7 @@ export default function InventoryPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {inventoryCounts.map((count) => (
+                            {inventoryCountsData.map((count) => (
                                 <TableRow key={count.id}>
                                     <TableCell>{count.date}</TableCell>
                                     <TableCell>{count.warehouseName || count.warehouseId}</TableCell>
@@ -745,15 +731,15 @@ export default function InventoryPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {isLoading && <p className="text-center p-4">جاري تحميل التنبيهات...</p>}
-              {!isLoading && inventoryAlerts.length === 0 && (
+              {!isLoading && inventoryAlertsData.length === 0 && (
                 <div className="text-center text-muted-foreground py-10">
                     <BellDot className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                     <p className="text-lg">لا توجد تنبيهات نشطة حاليًا.</p>
                     <p className="text-sm">سيتم عرض إشعارات المخزون الهامة هنا عند حدوثها.</p>
                 </div>
               )}
-              {!isLoading && inventoryAlerts.length > 0 && (
-                inventoryAlerts.map((alert) => (
+              {!isLoading && inventoryAlertsData.length > 0 && (
+                inventoryAlertsData.map((alert) => (
                   <Alert key={alert.id} variant={alert.severity === "info" ? "default" : alert.severity === "warning" ? "default" : "destructive"} className={`${alert.severity === "warning" ? "border-yellow-500 bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-700 [&>svg]:text-yellow-500 dark:[&>svg]:text-yellow-400" : ""}`}>
                     {alert.severity === "destructive" && <AlertOctagon className="h-5 w-5 ml-2" />}
                     {alert.severity === "warning" && <FileWarning className="h-5 w-5 ml-2" />}
@@ -802,7 +788,3 @@ export default function InventoryPage() {
     </>
   );
 }
-
-    
-
-    
