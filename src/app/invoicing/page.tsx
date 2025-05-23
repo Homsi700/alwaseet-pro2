@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, Eye, Edit, Trash2, Search, Filter, FileText, ShoppingBag, RotateCcw, FileSignature, Printer, Save, ScanLine, CalendarDays, Users2, Hash, ShieldCheck, ShieldX } from "lucide-react";
+import { PlusCircle, Eye, Edit, Trash2, Search, Filter, FileText, ShoppingBag, RotateCcw, FileSignature, Printer, Save, ScanLine, CalendarDays, Users2, Hash, ShieldCheck, ShieldX, DollarSign } from "lucide-react";
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -19,9 +19,10 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { getInvoices as getInvoicesService, createInvoice as createInvoiceService, updateInvoice as updateInvoiceService, deleteInvoice as deleteInvoiceService, Invoice, InvoiceItem as InvoiceLineItem, InvoiceStatus, InvoiceType } from "@/lib/services/invoicing";
+import { getInvoices as getInvoicesService, createInvoice as createInvoiceService, updateInvoice as updateInvoiceService, deleteInvoice as deleteInvoiceService, markInvoiceAsPaid as markInvoiceAsPaidService, addPaymentToInvoice as addPaymentToInvoiceService } from "@/lib/services/invoicing";
+import type { Invoice, InvoiceItem as InvoiceLineItem, InvoiceStatus, InvoiceType, Payment } from "@/types"; // Updated import
 import { getContacts, Contact } from "@/lib/services/contacts";
-import { getProducts, InventoryItem, getInventoryItemByBarcode } from "@/lib/services/inventory"; // Changed getInventoryItems to getProducts
+import { getProducts, InventoryItem, getInventoryItemByBarcode } from "@/lib/services/inventory";
 
 // Mappings for display
 const statusMap: Record<InvoiceStatus, string> = {
@@ -56,21 +57,23 @@ const invoiceItemSchema = z.object({
   unitPrice: z.coerce.number().min(0, "سعر الوحدة لا يمكن أن يكون سالبًا"),
   discountRate: z.coerce.number().min(0).max(1).optional().default(0),
   taxRate: z.coerce.number().min(0).max(1).default(0.15), // Default 15% VAT
+  totalPrice: z.number().optional(), // For display in form, calculated
 });
 type InvoiceItemFormData = z.infer<typeof invoiceItemSchema>;
 
 const invoiceFormSchema = z.object({
   type: z.enum(["Sales", "Purchase", "Tax", "Return", "Quote", "SalesOrder", "PurchaseOrder"], { required_error: "نوع الفاتورة مطلوب" }),
   customerSupplierId: z.string().min(1, "العميل/المورد مطلوب"),
-  date: z.string().min(1, "تاريخ الفاتورة مطلوب").refine(val => !isNaN(Date.parse(val.split('/').reverse().join('-'))), {message: "تاريخ الفاتورة غير صالح (DD/MM/YYYY)"}),
-  dueDate: z.string().optional().refine(val => !val || !isNaN(Date.parse(val.split('/').reverse().join('-'))), {message: "تاريخ الاستحقاق غير صالح (DD/MM/YYYY)"}),
+  date: z.string().min(1, "تاريخ الفاتورة مطلوب").refine(val => !isNaN(Date.parse(val)), {message: "تاريخ الفاتورة غير صالح (YYYY-MM-DD)"}),
+  dueDate: z.string().optional().refine(val => !val || !isNaN(Date.parse(val)), {message: "تاريخ الاستحقاق غير صالح (YYYY-MM-DD)"}),
   paymentMethod: z.string().optional(),
   salesperson: z.string().optional(),
   notes: z.string().optional(),
   isEInvoice: z.boolean().default(true),
-  eInvoiceStatus: z.string().optional(), // Consider enum if statuses are fixed
+  eInvoiceStatus: z.string().optional(), 
   status: z.enum(["Paid", "Pending", "Overdue", "Draft", "Cancelled", "PartiallyPaid"]).default("Draft"),
   items: z.array(invoiceItemSchema).min(1, "يجب إضافة بند واحد على الأقل للفاتورة"),
+  // Fields like amount, taxAmount, totalAmount will be set by backend or calculated before sending to API
 });
 type InvoiceFormData = z.infer<typeof invoiceFormSchema>;
 
@@ -88,37 +91,70 @@ function InvoiceDialog({ open, onOpenChange, invoice, onSave, contacts, products
   const form = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceFormSchema),
     defaultValues: {
-      type: "Sales", date: new Date().toLocaleDateString('fr-CA'), // YYYY-MM-DD for input type="date"
-      items: [{ productId: "", productName: "", quantity: 1, unitPrice: 0, taxRate: 0.15, discountRate: 0 }],
+      type: "Sales", date: new Date().toISOString().split('T')[0], 
+      items: [{ productId: "", productName: "", quantity: 1, unitPrice: 0, taxRate: 0.15, discountRate: 0, totalPrice: 0 }],
       isEInvoice: true, status: "Draft", paymentMethod: "نقدي",
     },
   });
-  const { fields, append, remove, update } = useFieldArray({ control: form.control, name: "items" });
+  const { fields, append, remove, update, watch } = useFieldArray({ control: form.control, name: "items" });
   const currentInvoiceType = form.watch("type");
+  const currentItems = watch("items");
+
+  const calculateItemTotalLocal = (item: InvoiceItemFormData) => {
+    if (!item.productId) return 0;
+    const productDetails = products.find(p => p.id === item.productId);
+    const unitPrice = productDetails ? (currentInvoiceType === "Purchase" ? productDetails.costPrice : productDetails.sellingPrice) : item.unitPrice;
+    const subTotal = (item.quantity || 0) * (unitPrice || 0);
+    const discountAmount = subTotal * (item.discountRate || 0);
+    const priceAfterDiscount = subTotal - discountAmount;
+    const taxAmountItem = priceAfterDiscount * (item.taxRate || 0);
+    return priceAfterDiscount + taxAmountItem;
+  };
+
+  useEffect(() => {
+    const subscription = watch((value, { name, type: eventType }) => {
+      if (name && name.startsWith("items") && (name.endsWith(".quantity") || name.endsWith(".unitPrice") || name.endsWith(".discountRate") || name.endsWith(".taxRate") || name.endsWith(".productId"))) {
+        const itemIndex = parseInt(name.split('.')[1], 10);
+        const currentItemValues = form.getValues(`items.${itemIndex}`);
+        const newTotal = calculateItemTotalLocal(currentItemValues);
+        // Only update if different to avoid infinite loops, though react-hook-form handles this well.
+        if (currentItemValues.totalPrice !== newTotal) {
+            form.setValue(`items.${itemIndex}.totalPrice`, newTotal, { shouldValidate: false, shouldDirty: false, shouldTouch: false });
+        }
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [watch, form, products, currentInvoiceType]);
+
 
   useEffect(() => {
     if (open) {
       if (invoice) {
         form.reset({
           ...invoice,
-          date: invoice.date.split('/').reverse().join('-'), // Convert DD/MM/YYYY to YYYY-MM-DD
-          dueDate: invoice.dueDate ? invoice.dueDate.split('/').reverse().join('-') : undefined,
+          date: invoice.date ? new Date(invoice.date.split('/').reverse().join('-')).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          dueDate: invoice.dueDate ? new Date(invoice.dueDate.split('/').reverse().join('-')).toISOString().split('T')[0] : undefined,
           customerSupplierId: invoice.customerSupplierId || "",
           items: invoice.items.map(item => ({
-            productId: item.productId, productName: item.productName, quantity: item.quantity,
-            unitPrice: item.unitPrice, discountRate: item.discountRate || 0, taxRate: item.taxRate || 0.15,
+            productId: item.productId, 
+            productName: item.productName || products.find(p=>p.id === item.productId)?.name || "", 
+            quantity: item.quantity,
+            unitPrice: item.unitPrice, 
+            discountRate: item.discountRate || 0, 
+            taxRate: item.taxRate || 0.15,
+            totalPrice: item.totalPrice || calculateItemTotalLocal(item as InvoiceItemFormData),
           }))
         });
       } else {
          form.reset({
-          type: "Sales", customerSupplierId: "", date: new Date().toISOString().split('T')[0], // YYYY-MM-DD
-          items: [{ productId: "", productName: "", quantity: 1, unitPrice: 0, taxRate: 0.15, discountRate: 0 }],
+          type: "Sales", customerSupplierId: "", date: new Date().toISOString().split('T')[0],
+          items: [{ productId: "", productName: "", quantity: 1, unitPrice: 0, taxRate: 0.15, discountRate: 0, totalPrice: 0 }],
           isEInvoice: true, status: "Draft", paymentMethod: "نقدي",
         });
       }
       setTimeout(() => itemBarcodeRefs.current[0]?.focus(), 100);
     }
-  }, [invoice, form, open]);
+  }, [invoice, form, open, products, currentInvoiceType]);
 
   const onSubmit = async (data: InvoiceFormData) => {
     const customerSupplier = contacts.find(c => c.id === data.customerSupplierId);
@@ -127,53 +163,55 @@ function InvoiceDialog({ open, onOpenChange, invoice, onSave, contacts, products
       return;
     }
     
-    let calculatedAmount = 0; let calculatedTaxAmount = 0;
-    const itemsWithDetails = data.items.map(item => {
+    // Prepare items for API: remove productName if it's only for display, ensure numbers
+    const itemsForApi = data.items.map(item => {
       const product = products.find(p => p.id === item.productId);
-      const basePrice = product ? (data.type === "Purchase" ? product.costPrice : product.sellingPrice) : item.unitPrice;
-      const itemSubTotalAfterDiscount = item.quantity * basePrice * (1 - (item.discountRate || 0));
-      const itemTax = itemSubTotalAfterDiscount * (item.taxRate || 0);
-      calculatedAmount += itemSubTotalAfterDiscount; 
-      calculatedTaxAmount += itemTax;
-      return { ...item, productName: product?.name || "منتج غير معروف", unitPrice: basePrice, totalPrice: itemSubTotalAfterDiscount + itemTax };
+      return {
+        productId: item.productId,
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.unitPrice || (product ? (data.type === "Purchase" ? product.costPrice : product.sellingPrice) : 0)),
+        discountRate: Number(item.discountRate || 0),
+        taxRate: Number(item.taxRate || 0.15),
+        // totalPrice is calculated by backend or can be sent if frontend calculation is source of truth
+      };
     });
-    const calculatedTotalAmount = calculatedAmount + calculatedTaxAmount;
     
-    const invoicePayload: Omit<Invoice, 'id' | 'invoiceNumber'> = {
-      ...data,
-      date: new Date(data.date).toLocaleDateString('ar-EG', {day:'2-digit', month:'2-digit', year:'numeric'}), 
-      dueDate: data.dueDate ? new Date(data.dueDate).toLocaleDateString('ar-EG', {day:'2-digit', month:'2-digit', year:'numeric'}) : undefined,
-      customerSupplierName: customerSupplier.name, items: itemsWithDetails,
-      amount: calculatedAmount, taxAmount: calculatedTaxAmount, totalAmount: calculatedTotalAmount,
+    const invoicePayload: any = { // Omit<Invoice, 'id' | 'invoiceNumber' | 'status' | 'amount' | 'taxAmount' | 'totalAmount' | 'balanceDue' | 'payments'>
+      type: data.type,
+      customerSupplierId: data.customerSupplierId,
+      customerSupplierName: customerSupplier.name, // Denormalized for API, backend might prefer just ID
+      date: data.date, // Should be YYYY-MM-DD
+      dueDate: data.dueDate || undefined,
+      paymentMethod: data.paymentMethod || undefined,
+      salesperson: data.salesperson || undefined,
+      notes: data.notes || undefined,
+      isEInvoice: data.isEInvoice,
+      eInvoiceStatus: data.eInvoiceStatus || undefined,
+      items: itemsForApi,
+      // status: data.status, // Backend usually sets initial status for new invoices
     };
+    
+    // For updates, include current status unless it's being changed by a specific action
+    if (invoice && invoice.id) {
+        invoicePayload.status = data.status;
+    }
+
 
     try {
       if (invoice && invoice.id) {
-        await updateInvoiceService(invoice.id, invoicePayload);
+        await updateInvoiceService(invoice.id, invoicePayload as Partial<Omit<Invoice, 'id' | 'invoiceNumber'>>);
         toast({ title: "تم تحديث الفاتورة بنجاح" });
       } else {
-        await createInvoiceService(invoicePayload);
+        await createInvoiceService(invoicePayload as Omit<Invoice, 'id' | 'invoiceNumber' | 'status' | 'amount' | 'taxAmount' | 'totalAmount' | 'balanceDue' | 'payments'>);
         toast({ title: "تم إنشاء الفاتورة بنجاح" });
       }
       onSave(); onOpenChange(false);
     } catch (error) { toast({ variant: "destructive", title: "حدث خطأ", description: `لم يتم حفظ الفاتورة. ${(error as Error).message}` }); }
   };
 
-  const calculateItemTotal = (index: number) => {
-    const item = form.getValues(`items.${index}`);
-    if (!item || !item.productId) return 0;
-    const product = products.find(p => p.id === item.productId);
-    const unitPrice = product ? (form.getValues("type") === "Purchase" ? product.costPrice : product.sellingPrice) : item.unitPrice;
-    const subTotal = (item.quantity || 0) * (unitPrice || 0);
-    const discountAmount = subTotal * (item.discountRate || 0);
-    const priceAfterDiscount = subTotal - discountAmount;
-    const taxAmount = priceAfterDiscount * (item.taxRate || 0);
-    return priceAfterDiscount + taxAmount;
-  }
 
   const calculateGrandTotal = () => {
-    const items = form.getValues("items");
-    return items.reduce((sum, item, index) => sum + calculateItemTotal(index), 0);
+    return currentItems.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
   }
 
   const handleBarcodeScan = async (barcode: string, itemIndex: number) => {
@@ -182,11 +220,20 @@ function InvoiceDialog({ open, onOpenChange, invoice, onSave, contacts, products
         const product = await getInventoryItemByBarcode(barcode.trim());
         if (product) {
             const price = form.getValues("type") === "Purchase" ? product.costPrice : product.sellingPrice;
-            update(itemIndex, { ...fields[itemIndex], productId: product.id, productName: product.name, unitPrice: price, quantity: fields[itemIndex]?.quantity || 1 });
+            const currentItem = fields[itemIndex];
+            update(itemIndex, { 
+                ...currentItem, 
+                productId: product.id, 
+                productName: product.name, 
+                unitPrice: price, 
+                quantity: currentItem?.quantity || 1,
+                // Recalculate total price for this item after updating product details
+                totalPrice: calculateItemTotalLocal({productId: product.id, productName: product.name, unitPrice: price, quantity: currentItem?.quantity || 1, taxRate: currentItem?.taxRate || 0.15, discountRate: currentItem?.discountRate || 0})
+            });
             toast({title: "تم العثور على المنتج", description: `تم تحديث البند: ${product.name}`});
             if (itemBarcodeRefs.current[itemIndex]) itemBarcodeRefs.current[itemIndex]!.value = "";
             
-            const quantityInput = document.getElementById(`items.${index}.quantity`);
+            const quantityInput = document.getElementById(`items.${itemIndex}.quantity`);
             if (quantityInput) {
                 quantityInput.focus();
                 (quantityInput as HTMLInputElement).select();
@@ -266,10 +313,10 @@ function InvoiceDialog({ open, onOpenChange, invoice, onSave, contacts, products
               <FormField control={form.control} name={`items.${index}.unitPrice`} render={({ field: itemField }) => (<FormItem><FormLabel className="text-xs md:hidden">سعر الوحدة</FormLabel><FormControl><Input type="number" step="any" {...itemField} className="h-9 text-sm text-center" readOnly={!!form.watch(`items.${index}.productId`)} /></FormControl><FormMessage /></FormItem>)}/>
               <FormField control={form.control} name={`items.${index}.discountRate`} render={({ field: itemField }) => (<FormItem><FormLabel className="text-xs md:hidden">خصم (%)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0" {...itemField} onChange={e => itemField.onChange(e.target.value ? parseFloat(e.target.value) / 100 : 0)} value={itemField.value !== undefined ? (itemField.value * 100).toFixed(0) : ""} className="h-9 text-sm text-center"/></FormControl><FormMessage /></FormItem>)}/>
               <FormField control={form.control} name={`items.${index}.taxRate`} render={({ field: itemField }) => (<FormItem><FormLabel className="text-xs md:hidden">ضريبة (%)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="15" {...itemField} onChange={e => itemField.onChange(e.target.value ? parseFloat(e.target.value) / 100 : 0.15)} value={itemField.value !== undefined ? (itemField.value * 100).toFixed(0) : "15"} className="h-9 text-sm text-center"/></FormControl><FormMessage /></FormItem>)}/>
-              <FormItem><FormLabel className="text-xs md:hidden">الإجمالي</FormLabel><Input value={calculateItemTotal(index).toFixed(2)} readOnly className="bg-muted h-9 text-sm text-center font-semibold"/></FormItem>
+              <FormItem><FormLabel className="text-xs md:hidden">الإجمالي</FormLabel><Input value={(form.getValues(`items.${index}.totalPrice`) || 0).toFixed(2)} readOnly className="bg-muted h-9 text-sm text-center font-semibold"/></FormItem>
               <Button type="button" variant="ghost" size="icon" onClick={() => fields.length > 1 && remove(index)} className="self-center md:self-end text-destructive h-9 w-9"><Trash2 className="h-4 w-4"/></Button>
             </div>))}
-            <Button type="button" variant="outline" size="sm" onClick={() => {append({ productId: "", productName:"", quantity: 1, unitPrice: 0, taxRate: 0.15, discountRate: 0 }); setTimeout(() => itemBarcodeRefs.current[fields.length]?.focus(),50);}}><PlusCircle className="ml-2 h-4 w-4"/>إضافة بند جديد</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => {append({ productId: "", productName:"", quantity: 1, unitPrice: 0, taxRate: 0.15, discountRate: 0, totalPrice: 0 }); setTimeout(() => itemBarcodeRefs.current[fields.length]?.focus(),50);}}><PlusCircle className="ml-2 h-4 w-4"/>إضافة بند جديد</Button>
           </CardContent></Card>
         <div className="text-left font-bold text-xl mt-4">الإجمالي الكلي للمستند: {calculateGrandTotal().toFixed(2)} ل.س</div>
         <DialogFooter className="pt-6"><DialogClose asChild><Button variant="outline">إلغاء</Button></DialogClose>
@@ -319,6 +366,96 @@ function InvoiceViewDialog({ open, onOpenChange, invoice }: InvoiceViewDialogPro
   );
 }
 
+interface AddPaymentDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  invoiceId: string | null;
+  onPaymentAdded: () => void;
+}
+
+const paymentFormSchema = z.object({
+  amount: z.coerce.number().min(0.01, "المبلغ يجب أن يكون أكبر من صفر"),
+  paymentDate: z.string().optional().refine(val => !val || !isNaN(Date.parse(val)), {message: "تاريخ الدفع غير صالح"}),
+  paymentMethod: z.enum(["نقدي", "شيك", "تحويل بنكي", "شبكة"], {required_error: "طريقة الدفع مطلوبة"}),
+  notes: z.string().optional(),
+});
+type PaymentFormData = z.infer<typeof paymentFormSchema>;
+
+function AddPaymentDialog({ open, onOpenChange, invoiceId, onPaymentAdded }: AddPaymentDialogProps) {
+  const { toast } = useToast();
+  const form = useForm<PaymentFormData>({
+    resolver: zodResolver(paymentFormSchema),
+    defaultValues: {
+      amount: 0,
+      paymentDate: new Date().toISOString().split('T')[0],
+      paymentMethod: "نقدي",
+      notes: "",
+    },
+  });
+
+  const onSubmit = async (data: PaymentFormData) => {
+    if (!invoiceId) {
+      toast({ variant: "destructive", title: "خطأ", description: "لم يتم تحديد فاتورة لإضافة الدفعة." });
+      return;
+    }
+    try {
+      const paymentPayload: Omit<Payment, 'id'> = {
+        amount: data.amount,
+        paymentDate: data.paymentDate ? new Date(data.paymentDate).toISOString() : new Date().toISOString(),
+        paymentMethod: data.paymentMethod,
+        notes: data.notes,
+      };
+      await addPaymentToInvoiceService(invoiceId, paymentPayload);
+      toast({ title: "تمت إضافة الدفعة بنجاح" });
+      onPaymentAdded();
+      onOpenChange(false);
+      form.reset();
+    } catch (error) {
+      toast({ variant: "destructive", title: "خطأ في إضافة الدفعة", description: (error as Error).message });
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(isOpen) => { onOpenChange(isOpen); if (!isOpen) form.reset(); }}>
+      <DialogContent dir="rtl">
+        <DialogHeader>
+          <DialogTitle>إضافة دفعة للفاتورة</DialogTitle>
+          <DialogDescription>أدخل تفاصيل الدفعة الجديدة.</DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-2">
+            <FormField control={form.control} name="amount" render={({ field }) => (
+              <FormItem><FormLabel>مبلغ الدفعة</FormLabel><FormControl><Input type="number" step="any" {...field} /></FormControl><FormMessage /></FormItem>
+            )}/>
+            <FormField control={form.control} name="paymentDate" render={({ field }) => (
+              <FormItem><FormLabel>تاريخ الدفعة</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+            )}/>
+            <FormField control={form.control} name="paymentMethod" render={({ field }) => (
+              <FormItem><FormLabel>طريقة الدفع</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value} dir="rtl">
+                  <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                  <SelectContent>
+                    <SelectItem value="نقدي">نقدي</SelectItem><SelectItem value="شيك">شيك</SelectItem>
+                    <SelectItem value="تحويل بنكي">تحويل بنكي</SelectItem><SelectItem value="شبكة">شبكة (مدى/فيزا)</SelectItem>
+                  </SelectContent>
+                </Select><FormMessage />
+              </FormItem>
+            )}/>
+            <FormField control={form.control} name="notes" render={({ field }) => (
+              <FormItem><FormLabel>ملاحظات (اختياري)</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>
+            )}/>
+            <DialogFooter className="pt-4">
+              <DialogClose asChild><Button variant="outline">إلغاء</Button></DialogClose>
+              <Button type="submit" disabled={form.formState.isSubmitting}><DollarSign className="ml-2 h-4 w-4"/>حفظ الدفعة</Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
 const handlePrintInvoice = (invoice: Invoice, fromDialog = false) => {
     console.log("Print invoice:", invoice.id);
     const features = fromDialog ? 'width=320,height=600,scrollbars=yes' : 'width=800,height=600,scrollbars=yes';
@@ -329,7 +466,7 @@ const handlePrintInvoice = (invoice: Invoice, fromDialog = false) => {
         printWindow.document.write('<style> body { font-family: "Tajawal", Arial, sans-serif; direction: rtl; margin: 10mm; font-size: 10pt; } table { width: 100%; border-collapse: collapse; margin-bottom: 15px; } th, td { border: 1px solid #ccc; padding: 5px; text-align: right; } .header { text-align: center; margin-bottom: 20px; } .header h1 {margin-bottom: 5px;} .total-section { margin-top: 15px; float: left; width: 40%; border: 1px solid #eee; padding: 10px; } .total-section p { margin: 3px 0; display: flex; justify-content: space-between;} @media print { body { margin:0; transform: scale(0.95); transform-origin: top left;} .no-print { display: none; } } </style>');
         printWindow.document.write('</head><body>');
         printWindow.document.write(`<div class="header"><h1>${typeMap[invoice.type]}</h1><h2>رقم: ${invoice.invoiceNumber}</h2></div>`);
-        printWindow.document.write(`<p><strong>العميل/المورد:</strong> ${invoice.customerSupplierName}</p><p><strong>التاريخ:</strong> ${invoice.date}</p>`);
+        printWindow.document.write(`<p><strong>${invoice.type === "Purchase" ? "المورد" : "العميل"}:</strong> ${invoice.customerSupplierName}</p><p><strong>التاريخ:</strong> ${invoice.date}</p>`); // Assuming date is already formatted DD/MM/YYYY
         if(invoice.dueDate) printWindow.document.write(`<p><strong>تاريخ الاستحقاق:</strong> ${invoice.dueDate}</p>`);
         if(invoice.paymentMethod) printWindow.document.write(`<p><strong>طريقة الدفع:</strong> ${invoice.paymentMethod}</p>`);
         
@@ -348,6 +485,10 @@ const handlePrintInvoice = (invoice: Invoice, fromDialog = false) => {
         printWindow.document.write(`<p><span>المبلغ قبل الضريبة:</span> <strong>${invoice.amount.toFixed(2)} ل.س</strong></p>`);
         printWindow.document.write(`<p><span>مبلغ الضريبة:</span> <strong>${invoice.taxAmount.toFixed(2)} ل.س</strong></p>`);
         printWindow.document.write(`<p style="font-size:1.2em;"><span>الإجمالي الكلي:</span> <strong>${invoice.totalAmount.toFixed(2)} ل.س</strong></p>`);
+        if(invoice.balanceDue !== undefined && invoice.balanceDue < invoice.totalAmount) {
+           printWindow.document.write(`<p><span>المدفوع:</span> <strong>${(invoice.totalAmount - invoice.balanceDue).toFixed(2)} ل.س</strong></p>`);
+           printWindow.document.write(`<p><span>المتبقي:</span> <strong>${invoice.balanceDue.toFixed(2)} ل.س</strong></p>`);
+        }
         printWindow.document.write('</div>');
         if(invoice.notes) printWindow.document.write(`<div style="clear:both; margin-top: 15px;"><p><strong>ملاحظات:</strong> ${invoice.notes}</p></div>`);
         printWindow.document.write('<p style="text-align:center; font-size: 8pt; margin-top:30px;">شكراً لتعاملكم معنا - الوسيط برو</p>')
@@ -358,11 +499,13 @@ const handlePrintInvoice = (invoice: Invoice, fromDialog = false) => {
   };
 
 
-const InvoiceTable = ({ invoices, typeLabel, onEdit, onDelete, onView, isLoading, onStatusChange }: { 
+const InvoiceTable = ({ invoices, typeLabel, onEdit, onDelete, onView, isLoading, onStatusChange, onAddPayment }: { 
   invoices: Invoice[]; typeLabel: string;
   onEdit: (invoice: Invoice) => void; onDelete: (invoice: Invoice) => void;
   onView: (invoice: Invoice) => void; 
-  isLoading: boolean; onStatusChange: (invoice: Invoice, newStatus: InvoiceStatus) => void;
+  isLoading: boolean; 
+  onStatusChange: (invoiceId: string, newStatus: InvoiceStatus) => void;
+  onAddPayment: (invoiceId: string) => void;
 }) => (
   <Card className="shadow-lg">
     <CardHeader>
@@ -387,6 +530,7 @@ const InvoiceTable = ({ invoices, typeLabel, onEdit, onDelete, onView, isLoading
             <TableHead><CalendarDays className="h-4 w-4 inline-block ml-1"/>التاريخ</TableHead>
             <TableHead><Users2 className="h-4 w-4 inline-block ml-1"/>العميل/المورد</TableHead>
             <TableHead className="text-left">الإجمالي (ل.س)</TableHead>
+            <TableHead className="text-left">الرصيد المستحق (ل.س)</TableHead>
             <TableHead className="text-center">الحالة</TableHead>
             <TableHead className="text-center">الإجراءات</TableHead>
           </TableRow></TableHeader>
@@ -397,8 +541,9 @@ const InvoiceTable = ({ invoices, typeLabel, onEdit, onDelete, onView, isLoading
                 <TableCell className="text-sm text-muted-foreground">{invoice.date}</TableCell>
                 <TableCell>{invoice.customerSupplierName}</TableCell>
                 <TableCell className="text-left font-semibold">{invoice.totalAmount.toFixed(2)}</TableCell>
+                <TableCell className="text-left font-semibold text-destructive">{invoice.balanceDue !== undefined ? invoice.balanceDue.toFixed(2) : invoice.totalAmount.toFixed(2)}</TableCell>
                 <TableCell className="text-center">
-                  <Select value={invoice.status} onValueChange={(newStatus) => onStatusChange(invoice, newStatus as InvoiceStatus)}>
+                  <Select value={invoice.status} onValueChange={(newStatus) => onStatusChange(invoice.id, newStatus as InvoiceStatus)}>
                     <SelectTrigger className={`h-8 text-xs ${getStatusColorClass(invoice.status)}`}>
                       <SelectValue />
                     </SelectTrigger>
@@ -412,6 +557,7 @@ const InvoiceTable = ({ invoices, typeLabel, onEdit, onDelete, onView, isLoading
                 <TableCell className="text-center space-x-1">
                   <Button variant="ghost" size="icon" title="عرض تفاصيل الفاتورة" onClick={() => onView(invoice)}><Eye className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="icon" title="طباعة الفاتورة" onClick={() => handlePrintInvoice(invoice)}><Printer className="h-4 w-4" /></Button>
+                   <Button variant="ghost" size="icon" title="إضافة دفعة" onClick={() => onAddPayment(invoice.id)} disabled={invoice.status === 'Paid' || invoice.status === 'Cancelled'}><DollarSign className="h-4 w-4"/></Button>
                   <Button variant="ghost" size="icon" title="تعديل الفاتورة" onClick={() => onEdit(invoice)} disabled={invoice.status === "Paid" || invoice.status === "Cancelled"}><Edit className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="icon" title="حذف الفاتورة" className="text-destructive hover:text-destructive" onClick={() => onDelete(invoice)} disabled={invoice.status === "Paid"}><Trash2 className="h-4 w-4" /></Button>
                 </TableCell>
@@ -433,6 +579,9 @@ export default function InvoicingPage() {
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  const [invoiceIdForPayment, setInvoiceIdForPayment] = useState<string | null>(null);
+
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [products, setProducts] = useState<InventoryItem[]>([]);
@@ -441,10 +590,19 @@ export default function InvoicingPage() {
     setIsLoading(true);
     try {
       const [invoicesData, contactsData, productsData] = await Promise.all([
-        getInvoicesService(), getContacts(), getProducts() // Changed getInventoryItems to getProducts
+        getInvoicesService(), getContacts(), getProducts()
       ]);
-      setAllInvoices(invoicesData); setContacts(contactsData); setProducts(productsData);
-    } catch (error) { toast({ variant: "destructive", title: "خطأ", description: "فشل تحميل بيانات الفواتير." }); }
+      setAllInvoices(invoicesData.map(inv => ({
+        ...inv,
+        // Ensure date formats are consistent for display if API returns ISO
+        date: inv.date ? new Date(inv.date).toLocaleDateString('ar-EG', { day: '2-digit', month: '2-digit', year: 'numeric' }) : "N/A",
+        dueDate: inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('ar-EG', { day: '2-digit', month: '2-digit', year: 'numeric' }) : undefined,
+      }))); 
+      setContacts(contactsData); setProducts(productsData);
+    } catch (error) { 
+        toast({ variant: "destructive", title: "خطأ في تحميل البيانات", description: (error as Error).message || "فشل تحميل بيانات الفواتير أو البيانات المرتبطة." }); 
+        console.error("Fetch page data error:", error);
+    }
     setIsLoading(false);
   }, [toast]);
   
@@ -459,6 +617,7 @@ export default function InvoicingPage() {
 
   const handleEditInvoice = (invoice: Invoice) => { setEditingInvoice(invoice); setIsDialogOpen(true); };
   const handleViewInvoice = (invoice: Invoice) => { setViewingInvoice(invoice); setIsViewDialogOpen(true); };
+  const handleOpenPaymentDialog = (invoiceId: string) => { setInvoiceIdForPayment(invoiceId); setIsPaymentDialogOpen(true);};
 
   const handleDeleteInvoice = async (invoice: Invoice) => {
      if (window.confirm(`هل أنت متأكد من حذف ${typeMap[invoice.type]} رقم ${invoice.invoiceNumber}؟`)) {
@@ -467,10 +626,15 @@ export default function InvoicingPage() {
     }
   };
 
-  const handleInvoiceStatusChange = async (invoice: Invoice, newStatus: InvoiceStatus) => {
-    if (window.confirm(`هل أنت متأكد من تغيير حالة الفاتورة ${invoice.invoiceNumber} إلى "${statusMap[newStatus]}"؟`)) {
+  const handleInvoiceStatusChange = async (invoiceId: string, newStatus: InvoiceStatus) => {
+    if (window.confirm(`هل أنت متأكد من تغيير حالة الفاتورة إلى "${statusMap[newStatus]}"؟`)) {
         try {
-            await updateInvoiceService(invoice.id, { status: newStatus });
+            if (newStatus === "Paid") {
+                await markInvoiceAsPaidService(invoiceId);
+            } else {
+                // For other status changes, use the general update endpoint
+                await updateInvoiceService(invoiceId, { status: newStatus });
+            }
             toast({ title: "تم تحديث الحالة بنجاح" });
             fetchPageData();
         } catch (error) {
@@ -501,16 +665,17 @@ export default function InvoicingPage() {
           <TabsTrigger value="purchaseOrders" className="text-sm py-2 flex items-center gap-1"><ShieldX className="h-4 w-4"/>أوامر شراء</TabsTrigger>
           <TabsTrigger value="tax" className="text-sm py-2 flex items-center gap-1"><FileSignature className="h-4 w-4"/>فواتير ضريبية</TabsTrigger> 
         </TabsList>
-        <TabsContent value="sales"><InvoiceTable invoices={salesInvoices} typeLabel="المبيعات" onEdit={handleEditInvoice} onDelete={handleDeleteInvoice} onView={handleViewInvoice} isLoading={isLoading} onStatusChange={handleInvoiceStatusChange}/></TabsContent>
-        <TabsContent value="purchase"><InvoiceTable invoices={purchaseInvoices} typeLabel="المشتريات" onEdit={handleEditInvoice} onDelete={handleDeleteInvoice} onView={handleViewInvoice} isLoading={isLoading} onStatusChange={handleInvoiceStatusChange}/></TabsContent>
-        <TabsContent value="returns"><InvoiceTable invoices={returnInvoices} typeLabel="المرتجعات" onEdit={handleEditInvoice} onDelete={handleDeleteInvoice} onView={handleViewInvoice} isLoading={isLoading} onStatusChange={handleInvoiceStatusChange}/></TabsContent>
-        <TabsContent value="quotes"><InvoiceTable invoices={quoteInvoices} typeLabel="عروض الأسعار" onEdit={handleEditInvoice} onDelete={handleDeleteInvoice} onView={handleViewInvoice} isLoading={isLoading} onStatusChange={handleInvoiceStatusChange}/></TabsContent>
-        <TabsContent value="salesOrders"><InvoiceTable invoices={salesOrderInvoices} typeLabel="أوامر البيع" onEdit={handleEditInvoice} onDelete={handleDeleteInvoice} onView={handleViewInvoice} isLoading={isLoading} onStatusChange={handleInvoiceStatusChange}/></TabsContent>
-        <TabsContent value="purchaseOrders"><InvoiceTable invoices={purchaseOrderInvoices} typeLabel="أوامر الشراء" onEdit={handleEditInvoice} onDelete={handleDeleteInvoice} onView={handleViewInvoice} isLoading={isLoading} onStatusChange={handleInvoiceStatusChange}/></TabsContent>
-        <TabsContent value="tax"><InvoiceTable invoices={taxInvoices} typeLabel="الفواتير الضريبية" onEdit={handleEditInvoice} onDelete={handleDeleteInvoice} onView={handleViewInvoice} isLoading={isLoading} onStatusChange={handleInvoiceStatusChange}/></TabsContent>
+        <TabsContent value="sales"><InvoiceTable invoices={salesInvoices} typeLabel="المبيعات" onEdit={handleEditInvoice} onDelete={handleDeleteInvoice} onView={handleViewInvoice} isLoading={isLoading} onStatusChange={handleInvoiceStatusChange} onAddPayment={handleOpenPaymentDialog}/></TabsContent>
+        <TabsContent value="purchase"><InvoiceTable invoices={purchaseInvoices} typeLabel="المشتريات" onEdit={handleEditInvoice} onDelete={handleDeleteInvoice} onView={handleViewInvoice} isLoading={isLoading} onStatusChange={handleInvoiceStatusChange} onAddPayment={handleOpenPaymentDialog}/></TabsContent>
+        <TabsContent value="returns"><InvoiceTable invoices={returnInvoices} typeLabel="المرتجعات" onEdit={handleEditInvoice} onDelete={handleDeleteInvoice} onView={handleViewInvoice} isLoading={isLoading} onStatusChange={handleInvoiceStatusChange} onAddPayment={handleOpenPaymentDialog}/></TabsContent>
+        <TabsContent value="quotes"><InvoiceTable invoices={quoteInvoices} typeLabel="عروض الأسعار" onEdit={handleEditInvoice} onDelete={handleDeleteInvoice} onView={handleViewInvoice} isLoading={isLoading} onStatusChange={handleInvoiceStatusChange} onAddPayment={handleOpenPaymentDialog}/></TabsContent>
+        <TabsContent value="salesOrders"><InvoiceTable invoices={salesOrderInvoices} typeLabel="أوامر البيع" onEdit={handleEditInvoice} onDelete={handleDeleteInvoice} onView={handleViewInvoice} isLoading={isLoading} onStatusChange={handleInvoiceStatusChange} onAddPayment={handleOpenPaymentDialog}/></TabsContent>
+        <TabsContent value="purchaseOrders"><InvoiceTable invoices={purchaseOrderInvoices} typeLabel="أوامر الشراء" onEdit={handleEditInvoice} onDelete={handleDeleteInvoice} onView={handleViewInvoice} isLoading={isLoading} onStatusChange={handleInvoiceStatusChange} onAddPayment={handleOpenPaymentDialog}/></TabsContent>
+        <TabsContent value="tax"><InvoiceTable invoices={taxInvoices} typeLabel="الفواتير الضريبية" onEdit={handleEditInvoice} onDelete={handleDeleteInvoice} onView={handleViewInvoice} isLoading={isLoading} onStatusChange={handleInvoiceStatusChange} onAddPayment={handleOpenPaymentDialog}/></TabsContent>
       </Tabs>
       {isDialogOpen && <InvoiceDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} invoice={editingInvoice} onSave={fetchPageData} contacts={contacts} products={products}/>}
       {isViewDialogOpen && <InvoiceViewDialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen} invoice={viewingInvoice} />}
+      {isPaymentDialogOpen && <AddPaymentDialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen} invoiceId={invoiceIdForPayment} onPaymentAdded={fetchPageData} />}
     </>
   );
 }
