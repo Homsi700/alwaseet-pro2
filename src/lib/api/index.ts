@@ -2,7 +2,30 @@
 // هذا الملف يقوم بتهيئة عميل Axios للاتصال بالخدمات (سواء وهمية أو حقيقية)
 
 import axios from 'axios';
-import { initializeMockServices } from './mockServices'; // تأكدي أن هذا المسار صحيح
+import {
+  initializeMockServices,
+  mockGetContacts,
+  mockCreateContact,
+  mockUpdateContact,
+  mockDeleteContact,
+  mockGetContactById,
+  mockGetProducts,
+  mockCreateProduct,
+  mockUpdateProduct,
+  mockDeleteProduct,
+  mockGetProductById,
+  mockGetInventoryItemByBarcode,
+  mockGetInventoryCounts,
+  mockGetInventoryAlerts,
+  mockGetStockMovements,
+  mockGetInvoices,
+  mockGetInvoiceById,
+  mockCreateInvoice,
+  mockUpdateInvoice,
+  mockDeleteInvoice,
+  mockMarkInvoiceAsPaid,
+  mockAddPaymentToInvoice,
+} from './mockServices'; // تأكدي أن هذا المسار صحيح
 
 // تهيئة الخدمات الوهمية بمجرد تحميل التطبيق
 // هذا الجزء سيتولى اعتراض طلبات Axios وتوفير بيانات وهمية بدلاً من الاتصال بـ API حقيقي
@@ -42,3 +65,33 @@ api.interceptors.response.use(
 );
 
 export default api;
+
+export const contactService = {
+  getContacts: mockGetContacts,
+  getContactById: mockGetContactById,
+  createContact: mockCreateContact,
+  updateContact: mockUpdateContact,
+  deleteContact: mockDeleteContact,
+};
+
+export const inventoryService = {
+  getProducts: mockGetProducts,
+  getProductById: mockGetProductById,
+  createProduct: mockCreateProduct,
+  updateProduct: mockUpdateProduct,
+  deleteProduct: mockDeleteProduct,
+  getInventoryItemByBarcode: mockGetInventoryItemByBarcode,
+  getInventoryCounts: mockGetInventoryCounts,
+  getInventoryAlerts: mockGetInventoryAlerts,
+  getStockMovements: mockGetStockMovements,
+};
+
+export const invoicingService = {
+  getInvoices: mockGetInvoices,
+  getInvoiceById: mockGetInvoiceById,
+  createInvoice: mockCreateInvoice,
+  updateInvoice: mockUpdateInvoice,
+  deleteInvoice: mockDeleteInvoice,
+  markInvoiceAsPaid: mockMarkInvoiceAsPaid,
+  addPaymentToInvoice: mockAddPaymentToInvoice,
+};
