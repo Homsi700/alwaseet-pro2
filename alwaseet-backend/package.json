@@ -19,6 +19,7 @@
     "mssql": "^11.0.1"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.18",
     "@types/express": "^5.0.2",
     "@types/mssql": "^9.1.7",
     "@types/node": "^22.15.21",

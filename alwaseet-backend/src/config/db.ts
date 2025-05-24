@@ -1,13 +1,4 @@
-<<<<<<< HEAD
 import sql from 'mssql';
-=======
-// alwaseet-backend/src/config/db.ts
-import sql, { ConnectionPool } from 'mssql';
-import dotenv from 'dotenv';
-
-// Load environment variables from .env file
-dotenv.config();
->>>>>>> backend-setup-pr
 
 const dbConfig = {
   user: process.env.DB_USER,
